@@ -2,14 +2,15 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# Carregar os dados
-df = pd.read_excel("Follow up 22.07.xlsm", sheet_name="Solicitação to", engine="openpyxl")
+# Carregar os dados do CSV exportado da aba "Solicitação to"
+df = pd.read_csv("solicitacao_to.csv", encoding="utf-8")
 
 # Limpeza de colunas
 cols = {col: col.strip() for col in df.columns}
 df.rename(columns=cols, inplace=True)
 
 # Título
+df = df.dropna(subset=['Mês', 'TIPO'])  # Garante que os filtros funcionem corretamente
 st.title("Dashboard de Solicitações TO")
 
 # Filtros
