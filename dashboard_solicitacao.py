@@ -142,18 +142,36 @@ with aba3:
 
 with aba4:
     st.subheader("💰 Gastos")
+
     if 'Valor' in df_filtrado.columns:
         if 'TIPO' in df_filtrado.columns:
             gasto_tipo = df_filtrado.groupby('TIPO')['Valor'].sum().reset_index()
-            fig_gt = px.bar(gasto_tipo.sort_values(by='Valor', ascending=False),
-                            x='TIPO', y='Valor',
-                            title='💰 Gastos por Tipo', text_auto=True)
+            fig_gt = px.bar(
+                gasto_tipo.sort_values(by='Valor', ascending=False),
+                x='TIPO', y='Valor',
+                title='💰 Gastos por Tipo',
+                text_auto=True
+            )
             st.plotly_chart(fig_gt, use_container_width=True)
 
         if 'Fornecedor' in df_filtrado.columns:
             gasto_forn = df_filtrado.groupby('Fornecedor')['Valor'].sum().reset_index()
-            gasto_forn['% do Total'] = round((gasto_forn['Valor'] / gasto_forn['Valor'].sum()) * 100, 2)
 
-fig_gf = px.bar( gasto_forn.sort_values(by='Valor', ascending=False), x='Fornecedor', y='Valor', title='🏷️ Gastos por Fornecedor', text_auto=True, color='Valor', color_continuous_scale='Blues' ) st.plotly_chart(fig_gf, use_container_width=True)
+            # ✅ Cálculo de % do Total
+            gasto_forn['% do Total'] = round(
+                (gasto_forn['Valor'] / gasto_forn['Valor'].sum()) * 100, 2
+            )
 
-st.dataframe(gasto_forn)
+            # 📊 Gráfico interativo
+            fig_gf = px.bar(
+                gasto_forn.sort_values(by='Valor', ascending=False),
+                x='Fornecedor', y='Valor',
+                title='🏷️ Gastos por Fornecedor',
+                text_auto=True,
+                color='Valor',
+                color_continuous_scale='Blues'
+            )
+            st.plotly_chart(fig_gf, use_container_width=True)
+
+            # 🧾 Tabela com % do Total
+            st.dataframe(gasto_forn)
