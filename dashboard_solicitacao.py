@@ -161,4 +161,5 @@ with aba3:
 
         if 'Fornecedor' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
             gasto_forn = df_filtrado.groupby('Fornecedor')['Valor'].sum().reset_index()
-            gasto_forn['% do Total'] = round((gasto_forn
+           gasto_forn['% do Total'] = round((gasto_forn['Valor'] / gasto_forn['Valor'].sum()) * 100, 2)
+
