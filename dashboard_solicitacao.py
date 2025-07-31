@@ -152,4 +152,8 @@ with aba4:
 
         if 'Fornecedor' in df_filtrado.columns:
             gasto_forn = df_filtrado.groupby('Fornecedor')['Valor'].sum().reset_index()
-            gasto_forn['% do Total'] = round((gasto_forn['Valor'] / gasto_forn['
+            gasto_forn['% do Total'] = round((gasto_forn['Valor'] / gasto_forn['Valor'].sum()) * 100, 2)
+
+fig_gf = px.bar( gasto_forn.sort_values(by='Valor', ascending=False), x='Fornecedor', y='Valor', title='🏷️ Gastos por Fornecedor', text_auto=True, color='Valor', color_continuous_scale='Blues' ) st.plotly_chart(fig_gf, use_container_width=True)
+
+st.dataframe(gasto_forn)
