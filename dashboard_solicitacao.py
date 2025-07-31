@@ -225,4 +225,3 @@ with aba3:
                           text_auto=True, color='Valor',
                           color_continuous_scale='Blues')
             st.plotly_chart(fig6, use_container_width=True)
-```
