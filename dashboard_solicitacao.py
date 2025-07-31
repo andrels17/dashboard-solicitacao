@@ -48,14 +48,14 @@ df.rename(columns={col: col.strip() for col in df.columns}, inplace=True)
 df['Data da Solicitação'] = pd.to_datetime(df['Data da Solicitação'], errors='coerce')
 df = df.dropna(subset=['Mês', 'TIPO', 'Data da Solicitação'])
 
-# 💰 Gera coluna de Valor se componentes estiverem presentes
+# 💰 Criação da coluna "Valor" se necessário
 if all(col in df.columns for col in ['Combustível', 'Manutenção', 'Peças']):
     df['Valor'] = df[['Combustível', 'Manutenção', 'Peças']].sum(axis=1)
 
 # 🎛️ Filtros
 st.title("📊 Dashboard de Solicitações TO")
 meses = sorted(df['Mês'].dropna().unique())
-tipos_disponiveis = sorted(df['TIPO'].dropna().unique())
+tipos = sorted(df['TIPO'].dropna().unique())
 fornecedores = sorted(df['Fornecedor'].dropna().unique())
 frotas = sorted(df['Frota'].dropna().unique()) if 'Frota' in df.columns else []
 data_min = df['Data da Solicitação'].min()
@@ -64,7 +64,7 @@ data_max = df['Data da Solicitação'].max()
 with st.sidebar:
     st.header("🎛️ Filtros")
     mes = st.selectbox("Mês", meses)
-    tipo_selecionado = st.selectbox("Tipo", ["Todos"] + tipos_disponiveis)
+    tipo_selecionado = st.selectbox("Tipo", ["Todos"] + tipos)
     fornecedor = st.selectbox("Fornecedor", ["Todos"] + fornecedores)
     frota_selecionada = st.selectbox("Frota", ["Todos"] + frotas) if frotas else "Todos"
     data_inicio, data_fim = st.date_input("Período", [data_min, data_max])
@@ -85,8 +85,8 @@ if frota_selecionada != "Todos":
 df_filtrado = df[filtro].copy().sort_values(by='Qtde. Pendente', ascending=False)
 df_filtrado['Alerta'] = df_filtrado['Qtde. Pendente'].apply(lambda x: '⚠️' if x > 50 else '')
 
-# 📚 Abas do dashboard
-aba1, aba2, aba3 = st.tabs(["📍 Indicadores", "📊 Gráficos", "📋 Tabela"])
+# 📚 Abas
+aba1, aba2, aba3, aba4 = st.tabs(["📍 Indicadores", "📊 Pendências", "📋 Tabela", "💰 Gastos"])
 
 with aba1:
     st.subheader("📍 Indicadores")
@@ -98,7 +98,7 @@ with aba1:
         st.metric("Gasto Total", f"R$ {df_filtrado['Valor'].sum():,.2f}")
 
 with aba2:
-    st.subheader("📊 Visualizações")
+    st.subheader("📊 Pendências")
 
     fig1 = px.bar(df_filtrado.groupby('Descrição')['Qtde. Pendente'].sum().nlargest(10).reset_index(),
                   x='Qtde. Pendente', y='Descrição', orientation='h', title='Top 10 Pendentes')
@@ -107,36 +107,16 @@ with aba2:
     fig2 = px.pie(df_filtrado, names='Status', title='Distribuição por Status')
     st.plotly_chart(fig2)
 
-    df_trend = df_filtrado.copy()
-    df_trend['AnoMes'] = df_trend['Data da Solicitação'].dt.to_period("M").astype(str)
-    fig3 = px.line(df_trend.groupby('AnoMes')['Qtde. Pendente'].sum().reset_index(),
-                   x='AnoMes', y='Qtde. Pendente', markers=True, title='Pendências por Mês')
-    st.plotly_chart(fig3)
+    df_filtrado['AnoMes'] = df_filtrado['Data da Solicitação'].dt.to_period("M").astype(str)
+    pendencia_mes = df_filtrado.groupby('AnoMes')['Qtde. Pendente'].sum().reset_index()
+    fig_mes = px.line(pendencia_mes, x='AnoMes', y='Qtde. Pendente', markers=True, title='📅 Pendência Mensal')
+    st.plotly_chart(fig_mes)
 
-    fig4 = px.scatter(df_filtrado.groupby('Fornecedor')['Qtde. Pendente'].sum().reset_index(),
-                      x='Fornecedor', y='Qtde. Pendente', size='Qtde. Pendente', title='Pendência por Fornecedor')
-    st.plotly_chart(fig4)
-
-    if 'Valor' in df_filtrado.columns and 'Frota' in df_filtrado.columns:
-        gastos_por_frota = df_filtrado.groupby('Frota')['Valor'].sum().reset_index().sort_values(by='Valor', ascending=False)
-        fig_gastos = px.bar(gastos_por_frota, x='Frota', y='Valor', title='💰 Gastos por Frota')
-        st.plotly_chart(fig_gastos)
-
-    if tipo_selecionado == "Todos":
-        st.subheader("📊 Comparativo entre Tipos")
-
-        pendencias_por_tipo = df_filtrado.groupby('TIPO')['Qtde. Pendente'].sum().reset_index()
-        fig_pend_tipo = px.bar(pendencias_por_tipo.sort_values(by='Qtde. Pendente', ascending=False),
-                               x='TIPO', y='Qtde. Pendente',
-                               title='📍 Pendências por Tipo', text_auto=True)
-        st.plotly_chart(fig_pend_tipo)
-
-        if 'Valor' in df_filtrado.columns:
-            gastos_por_tipo = df_filtrado.groupby('TIPO')['Valor'].sum().reset_index()
-            fig_gasto_tipo = px.bar(gastos_por_tipo.sort_values(by='Valor', ascending=False),
-                                    x='TIPO', y='Valor',
-                                    title='💰 Gastos por Tipo', text_auto=True)
-            st.plotly_chart(fig_gasto_tipo)
+    pendencia_fornecedor = df_filtrado.groupby('Fornecedor')['Qtde. Pendente'].sum().reset_index()
+    fig_fornecedor = px.bar(pendencia_fornecedor.sort_values(by='Qtde. Pendente', ascending=False),
+                            x='Qtde. Pendente', y='Fornecedor', orientation='h',
+                            title='📦 Pendência por Fornecedor', text_auto=True)
+    st.plotly_chart(fig_fornecedor)
 
 with aba3:
     st.subheader("📋 Dados Filtrados")
@@ -157,3 +137,25 @@ with aba3:
         file_name="dados_filtrados.csv",
         mime="text/csv"
     )
+
+with aba4:
+    st.subheader("💰 Gastos por Tipo")
+    if 'Valor' in df_filtrado.columns:
+        gastos_por_tipo = df_filtrado.groupby('TIPO')['Valor'].sum().reset_index()
+        fig_tipo_gasto = px.bar(gastos_por_tipo.sort_values(by='Valor', ascending=False),
+                                x='TIPO', y='Valor',
+                                title='💰 Total de Gastos por Tipo', text_auto=True)
+        st.plotly_chart(fig_tipo_gasto)
+
+        st.subheader("💰 Gastos por Fornecedor")
+        gastos_por_fornecedor = df_filtrado.groupby('Fornecedor')['Valor'].sum().reset_index()
+        fig_fornecedor_gasto = px.bar(gastos_por_fornecedor.sort_values(by='Valor', ascending=False),
+                                      x='Fornecedor', y='Valor',
+                                      title='🏷️ Gastos por Fornecedor', text_auto=True)
+        st.plotly_chart(fig_fornecedor_gasto)
+
+        if 'Frota' in df_filtrado.columns:
+            st.subheader("🚗 Gastos por Frota")
+            gastos_por_frota = df_filtrado.groupby('Frota')['Valor'].sum().reset_index()
+            fig_frota_gasto = px.bar(gastos_por_frota.sort_values(by='Valor', ascending=False),
+                                     x='Frota', y
