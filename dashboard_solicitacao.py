@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import csv
 
-# 🔍 Validação do CSV
+# 🔍 Funções de validação
 def detectar_configuracao_csv(arquivo):
     with open(arquivo, "r", encoding="utf-8") as f:
         linha = f.readline()
@@ -26,13 +26,14 @@ def validar_csv(entrada, saida):
         escritor.writerows(linhas_validas)
     return sep, n_colunas, linhas_validas, linhas_invalidas
 
-# 📁 Arquivos
+# 📁 Caminhos dos arquivos
 arquivo_original = "solicitacao_to.csv"
 arquivo_limpo = "csv_validado.csv"
 
+# ✅ Validação
 sep, n_colunas, linhas_validas, linhas_invalidas = validar_csv(arquivo_original, arquivo_limpo)
 
-# 📋 Sidebar: Validação
+# 📋 Sidebar: Relatório da validação
 st.sidebar.subheader("🔎 Validação do CSV")
 st.sidebar.write(f"Separador detectado: `{sep}`")
 st.sidebar.write(f"Colunas esperadas: {n_colunas}")
@@ -43,13 +44,13 @@ if linhas_invalidas:
         for i, linha in linhas_invalidas[:10]:
             st.write(f"Linha {i}: {linha}")
 
-# 🧾 Carregamento e ajustes
+# 📈 Carregamento e ajustes
 df = pd.read_csv(arquivo_limpo, sep=sep, encoding="utf-8")
 df.rename(columns={col: col.strip() for col in df.columns}, inplace=True)
 df['Data da Solicitação'] = pd.to_datetime(df['Data da Solicitação'], errors='coerce')
 df = df.dropna(subset=['Mês', 'TIPO', 'Data da Solicitação'])
 
-# 💰 Cria coluna Valor caso existam componentes
+# 💰 Cria coluna de valor total (se houver componentes)
 if all(col in df.columns for col in ['Combustível', 'Manutenção', 'Peças']):
     df['Valor'] = df[['Combustível', 'Manutenção', 'Peças']].sum(axis=1)
 
@@ -72,7 +73,7 @@ with st.sidebar:
     selected_frota = st.selectbox("Frota", ["Todos"] + frotas) if frotas else "Todos"
     data_inicio, data_fim = st.date_input("Período", [data_min, data_max])
 
-# 🔍 Aplicação dos Filtros
+# 🔎 Aplicação dos Filtros
 filtro = (
     (df['Mês'] == mes) &
     (df['TIPO'] == tipo) &
@@ -89,7 +90,7 @@ if selected_frota != "Todos":
 df_filtrado = df[filtro].copy().sort_values(by='Qtde. Pendente', ascending=False)
 df_filtrado['Alerta'] = df_filtrado['Qtde. Pendente'].apply(lambda x: '⚠️' if x > 50 else '')
 
-# 📚 Abas
+# 📚 Abas do dashboard
 aba1, aba2, aba3 = st.tabs(["📍 Indicadores", "📊 Gráficos", "📋 Tabela"])
 
 with aba1:
@@ -104,29 +105,35 @@ with aba1:
 with aba2:
     st.subheader("📊 Visualizações")
 
+    # Top 10 pendentes por descrição
     fig1 = px.bar(df_filtrado.groupby('Descrição')['Qtde. Pendente'].sum().nlargest(10).reset_index(),
                   x='Qtde. Pendente', y='Descrição', orientation='h', title='Top 10 Pendentes')
     st.plotly_chart(fig1)
 
+    # Pie por status
     fig2 = px.pie(df_filtrado, names='Status', title='Distribuição por Status')
     st.plotly_chart(fig2)
 
+    # Linha de tendência por mês
     df_trend = df_filtrado.copy()
     df_trend['AnoMes'] = df_trend['Data da Solicitação'].dt.to_period("M").astype(str)
     fig3 = px.line(df_trend.groupby('AnoMes')['Qtde. Pendente'].sum().reset_index(),
                    x='AnoMes', y='Qtde. Pendente', markers=True, title='Pendências por Mês')
     st.plotly_chart(fig3)
 
+    # Bolha por fornecedor
     fig4 = px.scatter(df_filtrado.groupby('Fornecedor')['Qtde. Pendente'].sum().reset_index(),
-                      x='Fornecedor', y='Qtde. Pendente', size='Qtde. Pendente', title='Pendência por Fornecedor')
+                      x='Fornecedor', y='Qtde. Pendente', size='Qtde. Pendente',
+                      title='Pendência por Fornecedor')
     st.plotly_chart(fig4)
 
+    # Gastos por frota
     if 'Valor' in df_filtrado.columns and 'Frota' in df_filtrado.columns:
         gastos_por_frota = df_filtrado.groupby('Frota')['Valor'].sum().reset_index().sort_values(by='Valor', ascending=False)
         fig_gastos = px.bar(gastos_por_frota, x='Frota', y='Valor', title='💰 Gastos por Frota')
         st.plotly_chart(fig_gastos)
 
-    # Comparativo entre Departamentos
+    # Comparativo por departamento
     if "Todos" in selected_departamentos:
         st.subheader("📊 Comparativo entre Departamentos")
 
@@ -144,10 +151,8 @@ with aba2:
 with aba3:
     st.subheader("📋 Dados Filtrados")
     st.caption(f"{len(df_filtrado)} registros encontrados")
+
     colunas_exibir = ['Alerta', 'Data da Solicitação', 'Descrição', 'Fornecedor',
                       'Departamento', 'Frota', 'Qtde. Solicitada', 'Qtde. Pendente',
                       'Valor', 'OC', 'Status']
-    colunas_exibir = [col for col in colunas_exibir if col in df_filtrado.columns]
-    st.dataframe(df_filtrado[colunas_exibir])
-    st.download_button("📥 Baixar CSV filtrado", df_filtrado.to_csv(index=False).encode('utf-8'),
-                       "dados_fil
+    colunas_exibir = [col for col in colunas
