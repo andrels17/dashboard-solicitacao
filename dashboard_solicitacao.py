@@ -41,14 +41,13 @@ def checkbox_filter(label: str, options: list[str], default: bool = True) -> lis
     Retorna a lista de opções selecionadas.
     """
     st.write(f"**{label}**")
-    key_all = f"{label}_all"
-    select_all = st.checkbox("Selecionar tudo", value=default, key=key_all)
-    selected = options.copy() if select_all else []
-    if not select_all:
-        for opt in options:
-            ck = st.checkbox(opt, value=False, key=f"{label}_{opt}")
-            if ck:
-                selected.append(opt)
+    select_all = st.checkbox("Selecionar tudo", value=default, key=f"{label}_all")
+    if select_all:
+        return options.copy()
+    selected = []
+    for opt in options:
+        if st.checkbox(opt, value=False, key=f"{label}_{opt}"):
+            selected.append(opt)
     return selected
 
 # ------------------------------------------------------------
@@ -70,7 +69,7 @@ st.set_page_config(page_title="Dashboard de Follow-up de Frotas", layout="wide")
 st.title("🚛 Dashboard de Follow-up de Frotas")
 
 # ------------------------------------------------------------
-# 3. Padroniza nomes e tipos
+# 3. Padroniza colunas e tipos
 # ------------------------------------------------------------
 df.rename(columns=lambda c: c.strip(), inplace=True)
 rename_map = {}
@@ -87,7 +86,6 @@ for col in df.columns:
 df.rename(columns=rename_map, inplace=True)
 df = df.loc[:, ~df.columns.duplicated()]
 
-# Conversão de datas e numéricos
 df['Data da Solicitação'] = pd.to_datetime(df['Data da Solicitação'], errors='coerce')
 if "Valor Último" in df and "Qtd. Solicitada" in df:
     df['Valor Último']    = pd.to_numeric(df['Valor Último'], errors='coerce')
@@ -97,7 +95,7 @@ if 'Dias em Situação' in df:
     df['Dias em Situação'] = pd.to_numeric(df['Dias em Situação'], errors='coerce')
 
 # ------------------------------------------------------------
-# 4. Sidebar: Tema + Filtros via checkboxes
+# 4. Sidebar: Tema e filtros
 # ------------------------------------------------------------
 with st.sidebar:
     tema = st.selectbox("🎨 Tema dos Gráficos", ["plotly_white", "plotly_dark"])
@@ -128,7 +126,7 @@ with st.sidebar:
 
     # Equipamentos
     equip_list = df['Cód.Equipamento'].dropna().astype(str).unique().tolist()
-    sel_equip = checkbox_filter("Equipamentos", equip_list)
+    sel_equip  = checkbox_filter("Equipamentos", equip_list)
 
     # Tipo
     if 'TIPO' in df:
@@ -152,20 +150,19 @@ with st.sidebar:
         sel_forn = []
 
 # ------------------------------------------------------------
-# 5. Aplica os filtros
+# 5. Aplica filtros
 # ------------------------------------------------------------
 mask = pd.Series(True, index=df.index)
 mask &= df['Data da Solicitação'].between(
     pd.to_datetime(data_inicio), pd.to_datetime(data_fim)
 )
 mask &= df['Cód.Equipamento'].astype(str).isin(sel_equip)
-if 'TIPO' in df:      mask &= df['TIPO'].isin(sel_tipo)
-if 'SITUAÇÃO' in df:  mask &= df['SITUAÇÃO'].isin(sel_sit)
-if 'Fornecedor' in df:mask &= df['Fornecedor'].isin(sel_forn)
+if sel_tipo:  mask &= df['TIPO'].isin(sel_tipo)
+if sel_sit:   mask &= df['SITUAÇÃO'].isin(sel_sit)
+if sel_forn:  mask &= df['Fornecedor'].isin(sel_forn)
 
 df_f = df[mask].copy()
 
-# Download
 with st.sidebar:
     st.markdown("---")
     st.write(f"🔎 Registros filtrados: {len(df_f)}")
@@ -183,18 +180,23 @@ def calcular_metricas(d):
                     if 'Dias em Situação' in d else 0.0
     }
 
-met_atual = calcular_metricas(df_f)
-delta     = data_fim - data_inicio
+met_atual  = calcular_metricas(df_f)
+delta      = data_fim - data_inicio
 prev_start = data_inicio - delta - timedelta(days=1)
 prev_end   = data_inicio - timedelta(days=1)
+
+# Converte limites para Timestamp antes de usar between
+prev_start_ts = pd.to_datetime(prev_start)
+prev_end_ts   = pd.to_datetime(prev_end)
+
 df_prev = df[
     df['Data da Solicitação']
-      .between(prev_start, prev_end)
+      .between(prev_start_ts, prev_end_ts)
 ]
 met_prev = calcular_metricas(df_prev)
 
 # ------------------------------------------------------------
-# 7. Aba de KPIs, Gráficos e Tabela
+# 7. TABS: KPIs, Gráficos e Tabela
 # ------------------------------------------------------------
 aba1, aba2, aba3 = st.tabs(["📍 KPIs", "📊 Gráficos", "📋 Tabela Interativa"])
 
@@ -224,7 +226,6 @@ with aba2:
     )
     fig_tl = px.bar(df_hist, x='Data', y='Qtde',
                     title="🗓️ Pedidos por Dia",
-                    labels={'Data':'Data','Qtde':'Qtde'},
                     template=tema)
     st.plotly_chart(fig_tl, use_container_width=True)
 
