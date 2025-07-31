@@ -165,49 +165,53 @@ with aba1:
             except:
                 st.metric("📅 Média Dias", "0,0 dias")
 
+# 📊 Gráficos
 with aba2:
     st.subheader("📊 Gráficos")
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado para gráficos.")
     else:
+        # garante que Código é string (categoria)
+        df_filtrado['Cód.Equipamento'] = df_filtrado['Cód.Equipamento'].astype(str)
+
         # 🔝 Top 10 Equipamentos por Gastos
-        if 'Cód.Equipamento' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
+        if 'Valor' in df_filtrado.columns:
             top_gastos = (
-                df_filtrado[['Cód.Equipamento', 'Valor']]
+                df_filtrado
                 .sort_values('Valor', ascending=False)
-                .head(10)
+                .head(10)[['Cód.Equipamento', 'Valor']]
             )
-            fig_equip_gastos = px.bar(
+            fig_gastos = px.bar(
                 top_gastos,
                 x='Valor',
                 y='Cód.Equipamento',
                 orientation='h',
                 title='🔝 Top 10 Equipamentos por Gastos',
-                text_auto=True,
+                text_auto='.2s',
                 color='Valor',
                 color_continuous_scale='Viridis'
             )
-            st.plotly_chart(fig_equip_gastos, use_container_width=True)
+            st.plotly_chart(fig_gastos, use_container_width=True)
 
         # 🔝 Top 10 Equipamentos com Mais Pedidos Pendentes
-        if 'Cód.Equipamento' in df_filtrado.columns and 'Qtd. Pendente' in df_filtrado.columns:
-            df_pendentes = df_filtrado[df_filtrado['Qtd. Pendente'] > 0]
+        if 'Qtd. Pendente' in df_filtrado.columns:
+            df_pend = df_filtrado[df_filtrado['Qtd. Pendente'] > 0]
             top_pend = (
-                df_pendentes[['Cód.Equipamento', 'Qtd. Pendente']]
+                df_pend
                 .sort_values('Qtd. Pendente', ascending=False)
-                .head(10)
+                .head(10)[['Cód.Equipamento', 'Qtd. Pendente']]
             )
-            fig_equip_pend = px.bar(
+            fig_pend = px.bar(
                 top_pend,
                 x='Qtd. Pendente',
                 y='Cód.Equipamento',
                 orientation='h',
-                title='🔝 Top 10 Equipamentos com Mais Pedidos Pendentes',
+                title='🔝 Top 10 Equipamentos com Mais Pendências',
                 text_auto=True,
                 color='Qtd. Pendente',
                 color_continuous_scale='Cividis'
             )
-            st.plotly_chart(fig_equip_pend, use_container_width=True)
+            st.plotly_chart(fig_pend, use_container_width=True)
 
 
 # 💰 Gastos
