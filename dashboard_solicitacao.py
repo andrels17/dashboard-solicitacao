@@ -20,7 +20,7 @@ def carregar_e_validar_csv(arquivo_original, arquivo_limpo):
     linhas_validas, linhas_invalidas = [], []
     with open(arquivo_original, "r", encoding="utf-8") as f_in:
         leitor = csv.reader(f_in, delimiter=sep)
-        for i, linha in enumerate(leitor, start=1):
+        for linha in leitor:
             if len(linha) == n_colunas:
                 linhas_validas.append(linha)
             else:
@@ -108,13 +108,19 @@ st.sidebar.write(f"🔎 Registros filtrados: {len(df_f)}")
 st.sidebar.markdown("---")
 st.sidebar.download_button("📥 Exportar CSV", df_f.to_csv(index=False), "export.csv", "text/csv")
 
-# 6. FUNÇÃO PARA MÉTRICAS
+# 6. FUNÇÃO PARA MÉTRICAS (com correção no cálculo de 'Dias em Situação')
 def calcular_metricas(dframe):
     stats = {}
-    stats['qtd_sol']  = int(dframe['Qtd. Solicitada'].sum() or 0)
-    stats['qtd_pen']  = int(dframe.get('Qtd. Pendente', 0).sum() or 0)
-    stats['valor']    = float(dframe.get('Valor', 0).sum() or 0.0)
-    stats['dias_med'] = float(dframe.get('Dias em Situação', 0).mean() or 0.0)
+    stats['qtd_sol'] = int(dframe['Qtd. Solicitada'].sum() or 0)
+    stats['qtd_pen'] = int(dframe.get('Qtd. Pendente', pd.Series(dtype=int)).sum() or 0)
+    stats['valor']   = float(dframe.get('Valor', pd.Series(dtype=float)).sum() or 0.0)
+
+    if 'Dias em Situação' in dframe.columns:
+        # calcula a média somente se a coluna existe
+        stats['dias_med'] = float(dframe['Dias em Situação'].mean() or 0.0)
+    else:
+        stats['dias_med'] = 0.0
+
     return stats
 
 met_atual = calcular_metricas(df_f)
@@ -138,7 +144,8 @@ with aba1:
               delta=met_atual['qtd_pen'] - met_prev['qtd_pen'])
     c3.metric("💸 Valor Total", f"R$ {met_atual['valor']:,.2f}",
               delta=f"R$ {met_atual['valor']-met_prev['valor']:,.2f}")
-    c4.metric("📅 Média Dias", f"{met_atual['dias_med']:.1f} dias",
+    c4.metric("📅 Média Dias",
+              f"{met_atual['dias_med']:.1f} dias",
               delta=f"{met_atual['dias_med']-met_prev['dias_med']:+.1f} dias")
     st.caption("Deltas comparados ao período anterior.")
 
@@ -185,7 +192,8 @@ with aba2:
         st.plotly_chart(fig_p, use_container_width=True)
 
     if 'TIPO' in df_f.columns:
-        tipo_sel = st.selectbox("Drill-down: selecione um Tipo", ["Todos"] + sorted(df_f['TIPO'].unique().tolist()))
+        tipo_sel = st.selectbox("Drill-down: selecione um Tipo",
+                                ["Todos"] + sorted(df_f['TIPO'].unique().tolist()))
         sub = df_f[df_f['TIPO'] == tipo_sel] if tipo_sel != "Todos" else df_f
         cnt = sub['Cód.Equipamento'].nunique()
         st.caption(f"{cnt} equipamentos em '{tipo_sel}'")
