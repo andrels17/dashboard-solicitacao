@@ -31,7 +31,7 @@ arquivo_original = "solicitacao_to.csv"
 arquivo_limpo = "csv_validado.csv"
 sep, n_colunas, linhas_validas, linhas_invalidas = validar_csv(arquivo_original, arquivo_limpo)
 
-# 📋 Relatório de validação
+# 📋 Relatório da validação
 st.sidebar.subheader("🔎 Validação do CSV")
 st.sidebar.write(f"Separador detectado: `{sep}`")
 st.sidebar.write(f"Colunas esperadas: {n_colunas}")
@@ -42,13 +42,13 @@ if linhas_invalidas:
         for i, linha in linhas_invalidas[:10]:
             st.write(f"Linha {i}: {linha}")
 
-# 📈 Carregamento dos dados
+# 📈 Carregamento
 df = pd.read_csv(arquivo_limpo, sep=sep, encoding="utf-8")
 df.rename(columns={col: col.strip() for col in df.columns}, inplace=True)
 df['Data da Solicitação'] = pd.to_datetime(df['Data da Solicitação'], errors='coerce')
 df = df.dropna(subset=['Mês', 'TIPO', 'Data da Solicitação'])
 
-# 💰 Criação da coluna "Valor" se necessário
+# 💰 Gera coluna Valor se necessário
 if all(col in df.columns for col in ['Combustível', 'Manutenção', 'Peças']):
     df['Valor'] = df[['Combustível', 'Manutenção', 'Peças']].sum(axis=1)
 
@@ -154,8 +154,14 @@ with aba4:
                                       title='🏷️ Gastos por Fornecedor', text_auto=True)
         st.plotly_chart(fig_fornecedor_gasto)
 
-        if 'Frota' in df_filtrado.columns:
+            if 'Frota' in df_filtrado.columns:
             st.subheader("🚗 Gastos por Frota")
             gastos_por_frota = df_filtrado.groupby('Frota')['Valor'].sum().reset_index()
-            fig_frota_gasto = px.bar(gastos_por_frota.sort_values(by='Valor', ascending=False),
-                                     x='Frota', y
+            fig_frota_gasto = px.bar(
+                gastos_por_frota.sort_values(by='Valor', ascending=False),
+                x='Frota', y='Valor',
+                title='🚗 Gastos por Frota',
+                text_auto=True
+            )
+            st.plotly_chart(fig_frota_gasto)
+
