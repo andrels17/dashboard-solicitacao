@@ -171,7 +171,7 @@ with aba2:
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado para gráficos.")
     else:
-        # garante que Código é string (categoria)
+        # garante que Código é string
         df_filtrado['Cód.Equipamento'] = df_filtrado['Cód.Equipamento'].astype(str)
 
         # 🔝 Top 10 Equipamentos por Gastos
@@ -187,17 +187,24 @@ with aba2:
                 y='Cód.Equipamento',
                 orientation='h',
                 title='🔝 Top 10 Equipamentos por Gastos',
-                text_auto='.2s',
+                text_auto='.2f',
                 color='Valor',
                 color_continuous_scale='Viridis'
             )
+            fig_gastos.update_layout(xaxis_tickformat=',.2f')
             st.plotly_chart(fig_gastos, use_container_width=True)
 
-        # 🔝 Top 10 Equipamentos com Mais Pedidos Pendentes
+        # converte pendente para inteiro (sem “k”)
         if 'Qtd. Pendente' in df_filtrado.columns:
-            df_pend = df_filtrado[df_filtrado['Qtd. Pendente'] > 0]
+            df_filtrado['Qtd. Pendente'] = (
+                df_filtrado['Qtd. Pendente']
+                .fillna(0)
+                .astype(int)
+            )
+
+            # 🔝 Top 10 Equipamentos com Mais Pendências
             top_pend = (
-                df_pend
+                df_filtrado
                 .sort_values('Qtd. Pendente', ascending=False)
                 .head(10)[['Cód.Equipamento', 'Qtd. Pendente']]
             )
@@ -207,12 +214,13 @@ with aba2:
                 y='Cód.Equipamento',
                 orientation='h',
                 title='🔝 Top 10 Equipamentos com Mais Pendências',
-                text_auto=True,
+                text_auto='.0f',
                 color='Qtd. Pendente',
                 color_continuous_scale='Cividis'
             )
+            # garante tick inteiro, sem prefixo
+            fig_pend.update_layout(xaxis_tickformat=',d')
             st.plotly_chart(fig_pend, use_container_width=True)
-
 
 # 💰 Gastos
 with aba3:
