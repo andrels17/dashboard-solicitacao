@@ -2,8 +2,13 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import csv
+import unidecode
 
-# 🔍 Detecta separador e colunas
+# 📁 Arquivo CSV
+arquivo_original = "solicitacao_to.csv"
+arquivo_limpo = "csv_validado.csv"
+
+# 🔍 Detecta separador e estrutura
 def detectar_configuracao_csv(arquivo):
     with open(arquivo, "r", encoding="utf-8") as f:
         linha = f.readline()
@@ -11,7 +16,7 @@ def detectar_configuracao_csv(arquivo):
         n_colunas = len(linha.strip().split(sep))
     return sep, n_colunas
 
-# 🧼 Valida e separa linhas boas/ruins
+# 🧼 Valida estrutura e grava versão limpa
 def validar_csv(entrada, saida):
     sep, n_colunas = detectar_configuracao_csv(entrada)
     linhas_validas, linhas_invalidas = [], []
@@ -27,12 +32,9 @@ def validar_csv(entrada, saida):
         escritor.writerows(linhas_validas)
     return sep, n_colunas, linhas_validas, linhas_invalidas
 
-# 📁 Validação e leitura
-arquivo_original = "solicitacao_to.csv"
-arquivo_limpo = "csv_validado.csv"
 sep, n_colunas, linhas_validas, linhas_invalidas = validar_csv(arquivo_original, arquivo_limpo)
 
-# 🎨 Interface Streamlit
+# 🎨 Layout
 st.set_page_config(page_title="Dashboard de Solicitações", layout="wide")
 st.title("📊 Dashboard de Equipamentos")
 st.sidebar.subheader("📎 Relatório do CSV")
@@ -42,29 +44,23 @@ st.sidebar.write(f"✔️ Linhas válidas: {len(linhas_validas)}")
 st.sidebar.write(f"❌ Linhas inválidas: {len(linhas_invalidas)}")
 st.sidebar.markdown("🌙 Dica: use extensão como [Dark Reader](https://darkreader.org/) para modo escuro.")
 
-# 📊 Carregamento de dados
+# 📊 Dados
 df = pd.read_csv(arquivo_limpo, sep=sep, encoding="utf-8")
 df.rename(columns={col: col.strip() for col in df.columns}, inplace=True)
 
-# 🔧 Renomeia automaticamente coluna de quantidade
+# 🔧 Renomeia automaticamente 'Qtd.' e 'Valor Último'
 for col in df.columns:
-    col_normalizado = col.lower().replace(" ", "").replace(".", "")
-    if "qtde" in col_normalizado or "qtd" in col_normalizado:
+    col_limpo = unidecode.unidecode(col.lower().replace(" ", "").replace(".", ""))
+    if "qtde" in col_limpo or "qtd" in col_limpo:
         df.rename(columns={col: "Qtd."}, inplace=True)
-        break
-
-# 🔧 Renomeia automaticamente coluna de valor unitário
-for col in df.columns:
-    col_normalizado = col.lower().replace(" ", "").replace(".", "")
-    if "valorultimacompra" in col_normalizado or "valoru" in col_normalizado or "ultimovalor" in col_normalizado:
+    if "valorultimacompra" in col_limpo or "valoru" in col_limpo or "ultimovalor" in col_limpo:
         df.rename(columns={col: "Valor Último"}, inplace=True)
-        break
 
 # 📆 Datas
 df['Data da Solicitação'] = pd.to_datetime(df['Data da Solicitação'], errors='coerce')
 df['AnoMes'] = df['Data da Solicitação'].dt.to_period("M").astype(str)
 
-# 💰 Cálculo seguro da coluna 'Valor'
+# 💰 Valor
 try:
     df['Qtd.'] = pd.to_numeric(df['Qtd.'], errors='coerce')
     df['Valor Último'] = pd.to_numeric(df['Valor Último'], errors='coerce')
@@ -72,7 +68,7 @@ try:
 except Exception as e:
     st.sidebar.error(f"Erro ao calcular coluna 'Valor': {e}")
 
-# ⚠️ Alerta visual
+# ⚠️ Alerta de dias em situação
 if 'Dias em Situação' in df.columns:
     df['Alerta Dias'] = df['Dias em Situação'].apply(lambda x: '⚠️' if x >= 30 else '')
 
@@ -86,12 +82,12 @@ data_max = df['Data da Solicitação'].max()
 with st.sidebar:
     st.header("🎛️ Filtros")
     tipo = st.selectbox("Tipo", ["Todos"] + tipos)
-    fornecedor = st.selectbox("Fornecedor", ["Todos"] + fornecedores) if fornecedores else "Todos"
-    frota = st.selectbox("Frota", ["Todos"] + frotas) if frotas else "Todos"
+    fornecedor = st.selectbox("Fornecedor", ["Todos"] + fornecedores)
+    frota = st.selectbox("Frota", ["Todos"] + frotas)
     data_inicio, data_fim = st.date_input("Período", [data_min, data_max])
     st.write(f"📅 Intervalo detectado: {data_min.date()} → {data_max.date()}")
 
-# 🔍 Aplicação dos filtros
+# 🔍 Aplica filtros
 filtro = (
     (df['Data da Solicitação'] >= pd.to_datetime(data_inicio)) &
     (df['Data da Solicitação'] <= pd.to_datetime(data_fim))
@@ -103,7 +99,7 @@ if frota != "Todos": filtro &= (df['Frota'] == frota)
 df_filtrado = df[filtro].copy()
 st.sidebar.write(f"🔎 Registros filtrados: {len(df_filtrado)}")
 
-# 💾 Botão de exportação
+# 💾 Exporta CSV filtrado
 csv_export = df_filtrado.to_csv(index=False).encode('utf-8')
 st.download_button(
     label="📥 Baixar Dados Filtrados (CSV)",
@@ -112,13 +108,14 @@ st.download_button(
     mime="text/csv"
 )
 
-# 📚 Abas visuais
+# 📚 Abas
 aba1, aba2, aba3 = st.tabs(["📍 Indicadores", "📊 Gráficos", "💰 Gastos"])
 
+# 🔢 Indicadores
 with aba1:
     st.subheader("📍 Indicadores")
     if df_filtrado.empty:
-        st.warning("⚠️ Nenhum dado encontrado com os filtros selecionados.")
+        st.warning("⚠️ Nenhum dado encontrado com os filtros.")
     else:
         if 'Qtd.' in df_filtrado.columns:
             st.metric("Solicitado", int(df_filtrado['Qtd.'].sum()))
@@ -127,13 +124,13 @@ with aba1:
         if 'Valor' in df_filtrado.columns:
             st.metric("Valor Total", f"R$ {df_filtrado['Valor'].sum():,.2f}")
         if 'Dias em Situação' in df_filtrado.columns:
-            media_dias = df_filtrado['Dias em Situação'].mean()
-            st.metric("Média Dias em Situação", f"{media_dias:.1f} dias")
+            st.metric("Média Dias em Situação", f"{df_filtrado['Dias em Situação'].mean():.1f} dias")
 
+# 📊 Gráficos
 with aba2:
     st.subheader("📊 Gráficos")
     if df_filtrado.empty:
-        st.warning("⚠️ Sem dados para gráficos.")
+        st.warning("⚠️ Nenhum dado para gráficos.")
     else:
         if 'AnoMes' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
             valor_mensal = df_filtrado.groupby('AnoMes')['Valor'].sum().reset_index()
@@ -142,8 +139,8 @@ with aba2:
             st.plotly_chart(fig_valor_mes, use_container_width=True)
 
         if 'Fornecedor' in df_filtrado.columns and 'Qtd. Pendente' in df_filtrado.columns:
-            pend_fornecedor = df_filtrado.groupby('Fornecedor')['Qtd. Pendente'].sum().reset_index()
-            fig_forn = px.bar(pend_fornecedor.sort_values(by='Qtd. Pendente', ascending=False),
+            pend = df_filtrado.groupby('Fornecedor')['Qtd. Pendente'].sum().reset_index()
+            fig_forn = px.bar(pend.sort_values(by='Qtd. Pendente', ascending=False),
                               x='Qtd. Pendente', y='Fornecedor',
                               orientation='h',
                               title='📦 Pendência por Fornecedor',
