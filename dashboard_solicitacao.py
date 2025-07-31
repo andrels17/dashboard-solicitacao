@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import csv
 
-# 🔍 Validação inteligente do CSV
+# 🔍 Validação do CSV
 def detectar_configuracao_csv(arquivo):
     with open(arquivo, "r", encoding="utf-8") as f:
         linha = f.readline()
@@ -31,7 +31,7 @@ arquivo_original = "solicitacao_to.csv"
 arquivo_limpo = "csv_validado.csv"
 sep, n_colunas, linhas_validas, linhas_invalidas = validar_csv(arquivo_original, arquivo_limpo)
 
-# 📋 Validação no sidebar
+# 📋 Relatório de validação
 st.sidebar.subheader("🔎 Validação do CSV")
 st.sidebar.write(f"Separador detectado: `{sep}`")
 st.sidebar.write(f"Colunas esperadas: {n_colunas}")
@@ -42,13 +42,13 @@ if linhas_invalidas:
         for i, linha in linhas_invalidas[:10]:
             st.write(f"Linha {i}: {linha}")
 
-# 📈 Carregamento
+# 📈 Carregamento dos dados
 df = pd.read_csv(arquivo_limpo, sep=sep, encoding="utf-8")
 df.rename(columns={col: col.strip() for col in df.columns}, inplace=True)
 df['Data da Solicitação'] = pd.to_datetime(df['Data da Solicitação'], errors='coerce')
 df = df.dropna(subset=['Mês', 'TIPO', 'Data da Solicitação'])
 
-# 💰 Soma dos valores se houver colunas componentes
+# 💰 Gera coluna de Valor se componentes estiverem presentes
 if all(col in df.columns for col in ['Combustível', 'Manutenção', 'Peças']):
     df['Valor'] = df[['Combustível', 'Manutenção', 'Peças']].sum(axis=1)
 
@@ -64,30 +64,28 @@ data_max = df['Data da Solicitação'].max()
 with st.sidebar:
     st.header("🎛️ Filtros")
     mes = st.selectbox("Mês", meses)
-    tipo = st.selectbox("Tipo principal", tipos_disponiveis)
+    tipo_selecionado = st.selectbox("Tipo", ["Todos"] + tipos_disponiveis)
     fornecedor = st.selectbox("Fornecedor", ["Todos"] + fornecedores)
-    selected_tipos = st.multiselect("Comparativo por Tipo", ["Todos"] + tipos_disponiveis, default=["Todos"])
-    selected_frota = st.selectbox("Frota", ["Todos"] + frotas) if frotas else "Todos"
+    frota_selecionada = st.selectbox("Frota", ["Todos"] + frotas) if frotas else "Todos"
     data_inicio, data_fim = st.date_input("Período", [data_min, data_max])
 
 # 🔍 Aplicação dos filtros
 filtro = (
     (df['Mês'] == mes) &
-    (df['TIPO'] == tipo) &
     (df['Data da Solicitação'] >= pd.to_datetime(data_inicio)) &
     (df['Data da Solicitação'] <= pd.to_datetime(data_fim))
 )
+if tipo_selecionado != "Todos":
+    filtro &= (df['TIPO'] == tipo_selecionado)
 if fornecedor != "Todos":
     filtro &= (df['Fornecedor'] == fornecedor)
-if "Todos" not in selected_tipos:
-    filtro &= df['TIPO'].isin(selected_tipos)
-if selected_frota != "Todos":
-    filtro &= (df['Frota'] == selected_frota)
+if frota_selecionada != "Todos":
+    filtro &= (df['Frota'] == frota_selecionada)
 
 df_filtrado = df[filtro].copy().sort_values(by='Qtde. Pendente', ascending=False)
 df_filtrado['Alerta'] = df_filtrado['Qtde. Pendente'].apply(lambda x: '⚠️' if x > 50 else '')
 
-# 📚 Abas
+# 📚 Abas do dashboard
 aba1, aba2, aba3 = st.tabs(["📍 Indicadores", "📊 Gráficos", "📋 Tabela"])
 
 with aba1:
@@ -124,7 +122,7 @@ with aba2:
         fig_gastos = px.bar(gastos_por_frota, x='Frota', y='Valor', title='💰 Gastos por Frota')
         st.plotly_chart(fig_gastos)
 
-    if "Todos" in selected_tipos:
+    if tipo_selecionado == "Todos":
         st.subheader("📊 Comparativo entre Tipos")
 
         pendencias_por_tipo = df_filtrado.groupby('TIPO')['Qtde. Pendente'].sum().reset_index()
