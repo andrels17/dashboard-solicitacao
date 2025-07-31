@@ -48,18 +48,25 @@ st.sidebar.markdown("🌙 Dica: use extensão como [Dark Reader](https://darkrea
 df = pd.read_csv(arquivo_limpo, sep=sep, encoding="utf-8")
 df.rename(columns={col: col.strip() for col in df.columns}, inplace=True)
 
-# 🔧 Mapeia e renomeia colunas de quantidade e valor
+# 🔧 Mapeia e renomeia colunas conforme seus headers reais
 rename_map = {}
 for col in df.columns:
     chave = unidecode.unidecode(col.lower().replace(" ", "").replace(".", ""))
-    if chave in ("qtde", "qtd", "quantidade"):
+    if "qtde" in chave and "pendente" not in chave and "entregue" not in chave:
         rename_map[col] = "Qtd. Solicitada"
-    elif "qtdpendente" in chave or "quantidadependente" in chave:
+    elif "pendente" in chave:
         rename_map[col] = "Qtd. Pendente"
+    elif "entregue" in chave:
+        rename_map[col] = "Qtd. Entregue"
+    elif "diaspentrega" in chave or "diasparaocseragerada" in chave:
+        rename_map[col] = "Dias em Situação"
     elif "valorultimacompra" in chave or "valoru" in chave or "ultimovalor" in chave:
         rename_map[col] = "Valor Último"
 
 df.rename(columns=rename_map, inplace=True)
+
+# elimina duplicatas resultantes de conflito de nomes
+df = df.loc[:, ~df.columns.duplicated()]
 
 # 📆 Datas
 df['Data da Solicitação'] = pd.to_datetime(df['Data da Solicitação'], errors='coerce')
@@ -87,9 +94,9 @@ data_max     = df['Data da Solicitação'].max()
 
 with st.sidebar:
     st.header("🎛️ Filtros")
-    tipo     = st.selectbox("Tipo",        ["Todos"] + tipos)
-    fornecedor = st.selectbox("Fornecedor", ["Todos"] + fornecedores)
-    frota    = st.selectbox("Frota",        ["Todos"] + frotas)
+    tipo       = st.selectbox("Tipo",        ["Todos"] + tipos)
+    fornecedor = st.selectbox("Fornecedor",  ["Todos"] + fornecedores)
+    frota      = st.selectbox("Frota",        ["Todos"] + frotas)
     data_inicio, data_fim = st.date_input("Período", [data_min, data_max])
     st.write(f"📅 Intervalo detectado: {data_min.date()} → {data_max.date()}")
 
@@ -98,9 +105,9 @@ filtro = (
     (df['Data da Solicitação'] >= pd.to_datetime(data_inicio)) &
     (df['Data da Solicitação'] <= pd.to_datetime(data_fim))
 )
-if tipo != "Todos":      filtro &= (df['TIPO'] == tipo)
+if tipo != "Todos":       filtro &= (df['TIPO'] == tipo)
 if fornecedor != "Todos": filtro &= (df['Fornecedor'] == fornecedor)
-if frota != "Todos":     filtro &= (df['Frota'] == frota)
+if frota != "Todos":      filtro &= (df['Frota'] == frota)
 
 df_filtrado = df[filtro].copy()
 st.sidebar.write(f"🔎 Registros filtrados: {len(df_filtrado)}")
@@ -120,7 +127,6 @@ aba1, aba2, aba3 = st.tabs(["📍 Indicadores", "📊 Gráficos", "💰 Gastos"]
 # 🔢 Indicadores
 with aba1:
     st.subheader("📍 Indicadores")
-
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado encontrado com os filtros.")
     else:
@@ -196,7 +202,6 @@ with aba2:
 # 💰 Gastos
 with aba3:
     st.subheader("💰 Gastos")
-
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado para exibir os gastos.")
     else:
