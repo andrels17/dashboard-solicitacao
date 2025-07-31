@@ -46,14 +46,14 @@ st.sidebar.markdown("🌙 Dica: use extensão como [Dark Reader](https://darkrea
 df = pd.read_csv(arquivo_limpo, sep=sep, encoding="utf-8")
 df.rename(columns={col: col.strip() for col in df.columns}, inplace=True)
 
-# 🔧 Detecta e renomeia coluna de quantidade
+# 🔧 Renomeia automaticamente coluna de quantidade
 for col in df.columns:
     col_normalizado = col.lower().replace(" ", "").replace(".", "")
     if "qtde" in col_normalizado or "qtd" in col_normalizado:
         df.rename(columns={col: "Qtd."}, inplace=True)
         break
 
-# 🔧 Detecta e renomeia coluna de valor unitário
+# 🔧 Renomeia automaticamente coluna de valor unitário
 for col in df.columns:
     col_normalizado = col.lower().replace(" ", "").replace(".", "")
     if "valorultimacompra" in col_normalizado or "valoru" in col_normalizado or "ultimovalor" in col_normalizado:
@@ -167,28 +167,4 @@ with aba3:
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado para exibir os gastos.")
     else:
-        if 'TIPO' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
-            gasto_tipo = df_filtrado.groupby('TIPO')['Valor'].sum().reset_index()
-            fig_gt = px.bar(gasto_tipo.sort_values(by='Valor', ascending=False),
-                            x='TIPO', y='Valor',
-                            title='💰 Gastos por Tipo',
-                            text_auto=True,
-                            color='Valor',
-                            color_continuous_scale='Teal')
-            st.plotly_chart(fig_gt, use_container_width=True)
-
-            fig_pizza_tipo = px.pie(df_filtrado,
-                                    names='TIPO',
-                                    values='Valor',
-                                    title='🧁 Distribuição de Gastos por Tipo')
-            st.plotly_chart(fig_pizza_tipo, use_container_width=True)
-
-        if 'Fornecedor' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
-            gasto_forn = df_filtrado.groupby('Fornecedor')['Valor'].sum().reset_index()
-            fig_forn_gasto = px.bar(gasto_forn.sort_values(by='Valor', ascending=False),
-                                    x='Fornecedor', y='Valor',
-                                    title='🏢 Gastos por Fornecedor',
-                                    text_auto=True,
-                                    color='Valor',
-                                    color_continuous_scale='Blues')
-            st.plotly_chart(fig_forn_gasto, use_container_width=True)
+        if 'TIPO' in df_filtrado.columns and 'Valor
