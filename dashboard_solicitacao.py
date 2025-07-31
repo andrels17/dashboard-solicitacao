@@ -1,3 +1,4 @@
+```python
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -6,14 +7,14 @@ import unidecode
 
 # 📁 Arquivo CSV
 arquivo_original = "solicitacao_to.csv"
-arquivo_limpo = "csv_validado.csv"
+arquivo_limpo    = "csv_validado.csv"
 
 # 🔍 Detecta separador e estrutura
 def detectar_configuracao_csv(arquivo):
     with open(arquivo, "r", encoding="utf-8") as f:
-        linha = f.readline()
-        sep = ";" if ";" in linha else "," if "," in linha else ","
-        n_colunas = len(linha.strip().split(sep))
+        primeira = f.readline()
+        sep = ";" if ";" in primeira else "," if "," in primeira else ","
+        n_colunas = len(primeira.strip().split(sep))
     return sep, n_colunas
 
 # 🧼 Valida estrutura e grava versão limpa
@@ -48,42 +49,48 @@ st.sidebar.markdown("🌙 Dica: use extensão como [Dark Reader](https://darkrea
 df = pd.read_csv(arquivo_limpo, sep=sep, encoding="utf-8")
 df.rename(columns={col: col.strip() for col in df.columns}, inplace=True)
 
-# 🔧 Renomeia 'Qtd.' e 'Valor Último'
+# 🔧 Mapeia e renomeia colunas de quantidade e valor
+rename_map = {}
 for col in df.columns:
-    col_limpo = unidecode.unidecode(col.lower().replace(" ", "").replace(".", ""))
-    if "qtde" in col_limpo or "qtd" in col_limpo:
-        df.rename(columns={col: "Qtd."}, inplace=True)
-    if "valorultimacompra" in col_limpo or "valoru" in col_limpo or "ultimovalor" in col_limpo:
-        df.rename(columns={col: "Valor Último"}, inplace=True)
+    chave = unidecode.unidecode(col.lower().replace(" ", "").replace(".", ""))
+    if chave in ("qtde", "qtd", "quantidade"):
+        rename_map[col] = "Qtd. Solicitada"
+    elif "qtdpendente" in chave or "quantidadependente" in chave:
+        rename_map[col] = "Qtd. Pendente"
+    elif "valorultimacompra" in chave or "valoru" in chave or "ultimovalor" in chave:
+        rename_map[col] = "Valor Último"
+
+df.rename(columns=rename_map, inplace=True)
 
 # 📆 Datas
 df['Data da Solicitação'] = pd.to_datetime(df['Data da Solicitação'], errors='coerce')
 df['AnoMes'] = df['Data da Solicitação'].dt.to_period("M").astype(str)
 
-# 💰 Valor
+# 💰 Cálculo de Valor
 try:
-    df['Qtd.'] = pd.to_numeric(df['Qtd.'], errors='coerce')
-    df['Valor Último'] = pd.to_numeric(df['Valor Último'], errors='coerce')
-    df['Valor'] = df['Qtd.'] * df['Valor Último']
+    df['Qtd. Solicitada']   = pd.to_numeric(df['Qtd. Solicitada'], errors='coerce')
+    df['Valor Último']      = pd.to_numeric(df['Valor Último'], errors='coerce')
+    df['Valor']             = df['Qtd. Solicitada'] * df['Valor Último']
 except Exception as e:
     st.sidebar.error(f"Erro ao calcular coluna 'Valor': {e}")
 
 # ⚠️ Alerta de dias em situação
 if 'Dias em Situação' in df.columns:
-    df['Alerta Dias'] = pd.to_numeric(df['Dias em Situação'], errors='coerce').apply(lambda x: '⚠️' if x >= 30 else '')
+    df['Dias em Situação'] = pd.to_numeric(df['Dias em Situação'], errors='coerce')
+    df['Alerta Dias']      = df['Dias em Situação'].apply(lambda x: '⚠️' if x >= 30 else '')
 
 # 🎛️ Filtros
-tipos = sorted(df['TIPO'].dropna().unique()) if 'TIPO' in df.columns else []
+tipos        = sorted(df['TIPO'].dropna().unique())        if 'TIPO' in df.columns        else []
 fornecedores = sorted(df['Fornecedor'].dropna().unique()) if 'Fornecedor' in df.columns else []
-frotas = sorted(df['Frota'].dropna().unique()) if 'Frota' in df.columns else []
-data_min = df['Data da Solicitação'].min()
-data_max = df['Data da Solicitação'].max()
+frotas       = sorted(df['Frota'].dropna().unique())      if 'Frota' in df.columns       else []
+data_min     = df['Data da Solicitação'].min()
+data_max     = df['Data da Solicitação'].max()
 
 with st.sidebar:
     st.header("🎛️ Filtros")
-    tipo = st.selectbox("Tipo", ["Todos"] + tipos)
+    tipo     = st.selectbox("Tipo",        ["Todos"] + tipos)
     fornecedor = st.selectbox("Fornecedor", ["Todos"] + fornecedores)
-    frota = st.selectbox("Frota", ["Todos"] + frotas)
+    frota    = st.selectbox("Frota",        ["Todos"] + frotas)
     data_inicio, data_fim = st.date_input("Período", [data_min, data_max])
     st.write(f"📅 Intervalo detectado: {data_min.date()} → {data_max.date()}")
 
@@ -92,9 +99,9 @@ filtro = (
     (df['Data da Solicitação'] >= pd.to_datetime(data_inicio)) &
     (df['Data da Solicitação'] <= pd.to_datetime(data_fim))
 )
-if tipo != "Todos": filtro &= (df['TIPO'] == tipo)
+if tipo != "Todos":      filtro &= (df['TIPO'] == tipo)
 if fornecedor != "Todos": filtro &= (df['Fornecedor'] == fornecedor)
-if frota != "Todos": filtro &= (df['Frota'] == frota)
+if frota != "Todos":     filtro &= (df['Frota'] == frota)
 
 df_filtrado = df[filtro].copy()
 st.sidebar.write(f"🔎 Registros filtrados: {len(df_filtrado)}")
@@ -118,41 +125,40 @@ with aba1:
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado encontrado com os filtros.")
     else:
-        # 📦 Quantidade Solicitada
+        # 📦 Qtd. Solicitada
         try:
-            qtd_solicitada = df_filtrado['Qtd.'].sum()
-            qtd_solicitada = int(qtd_solicitada) if pd.notnull(qtd_solicitada) else 0
-            st.metric("📦 Solicitado", qtd_solicitada)
+            qs = df_filtrado['Qtd. Solicitada'].sum()
+            qs = int(qs) if pd.notnull(qs) else 0
+            st.metric("📦 Solicitada", qs)
         except:
-            st.metric("📦 Solicitado", 0)
+            st.metric("📦 Solicitada", 0)
 
-        # ⏳ Quantidade Pendente
+        # ⏳ Qtd. Pendente
         if 'Qtd. Pendente' in df_filtrado.columns:
             try:
-                qtd_pendente = df_filtrado['Qtd. Pendente'].sum()
-                qtd_pendente = int(qtd_pendente) if pd.notnull(qtd_pendente) else 0
-                st.metric("⏳ Pendente", qtd_pendente)
+                qp = df_filtrado['Qtd. Pendente'].sum()
+                qp = int(qp) if pd.notnull(qp) else 0
+                st.metric("⏳ Pendente", qp)
             except:
                 st.metric("⏳ Pendente", 0)
 
         # 💸 Valor Total
         if 'Valor' in df_filtrado.columns:
             try:
-                valor_total = df_filtrado['Valor'].sum()
-                valor_total = 0.0 if pd.isna(valor_total) else valor_total
-                st.metric("💸 Valor Total", f"R$ {valor_total:,.2f}")
+                vt = df_filtrado['Valor'].sum()
+                vt = 0.0 if pd.isna(vt) else vt
+                st.metric("💸 Valor Total", f"R$ {vt:,.2f}")
             except:
                 st.metric("💸 Valor Total", "R$ 0,00")
 
         # 📅 Média Dias em Situação
         if 'Dias em Situação' in df_filtrado.columns:
             try:
-                media_dias = df_filtrado['Dias em Situação'].mean()
-                media_dias = 0.0 if pd.isna(media_dias) else media_dias
-                st.metric("📅 Média Dias", f"{media_dias:.1f} dias")
+                md = df_filtrado['Dias em Situação'].mean()
+                md = 0.0 if pd.isna(md) else md
+                st.metric("📅 Média Dias", f"{md:.1f} dias")
             except:
-                st.metric("📅 Média Dias", "0.0 dias")
-
+                st.metric("📅 Média Dias", "0,0 dias")
 
 # 📊 Gráficos
 with aba2:
@@ -160,65 +166,64 @@ with aba2:
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado para gráficos.")
     else:
+        # Valor por Mês
         if 'AnoMes' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
             valor_mensal = df_filtrado.groupby('AnoMes')['Valor'].sum().reset_index()
-            fig_valor_mes = px.line(valor_mensal, x='AnoMes', y='Valor', markers=True, title='📈 Valor por Mês')
-            st.plotly_chart(fig_valor_mes, use_container_width=True)
+            fig1 = px.line(valor_mensal, x='AnoMes', y='Valor',
+                           markers=True, title='📈 Valor por Mês')
+            st.plotly_chart(fig1, use_container_width=True)
 
+        # Pendência por Fornecedor
         if 'Fornecedor' in df_filtrado.columns and 'Qtd. Pendente' in df_filtrado.columns:
             pend = df_filtrado.groupby('Fornecedor')['Qtd. Pendente'].sum().reset_index()
-            fig_forn = px.bar(pend.sort_values(by='Qtd. Pendente', ascending=False),
-                              x='Qtd. Pendente', y='Fornecedor',
-                              orientation='h',
-                              title='📦 Pendência por Fornecedor',
-                              text_auto=True,
-                              color='Qtd. Pendente',
-                              color_continuous_scale='Oranges')
-            st.plotly_chart(fig_forn, use_container_width=True)
+            fig2 = px.bar(pend.sort_values(by='Qtd. Pendente', ascending=False),
+                          x='Qtd. Pendente', y='Fornecedor',
+                          orientation='h',
+                          title='📦 Pendência por Fornecedor',
+                          text_auto=True, color='Qtd. Pendente',
+                          color_continuous_scale='Oranges')
+            st.plotly_chart(fig2, use_container_width=True)
 
-        if 'TIPO' in df_filtrado.columns and 'Qtd.' in df_filtrado.columns:
-            tipo_qtd = df_filtrado.groupby('TIPO')['Qtd.'].sum().reset_index()
-            fig_tipo = px.bar(tipo_qtd.sort_values(by='Qtd.', ascending=False),
-                              x='TIPO', y='Qtd.',
-                              title='🧱 Quantidade por Tipo',
-                              text_auto=True,
-                              color='Qtd.',
-                              color_continuous_scale='Purples')
-            st.plotly_chart(fig_tipo, use_container_width=True)
+        # Quantidade por Tipo
+        if 'TIPO' in df_filtrado.columns and 'Qtd. Solicitada' in df_filtrado.columns:
+            tipo_qtd = df_filtrado.groupby('TIPO')['Qtd. Solicitada'].sum().reset_index()
+            fig3 = px.bar(tipo_qtd.sort_values(by='Qtd. Solicitada', ascending=False),
+                          x='TIPO', y='Qtd. Solicitada',
+                          title='🧱 Quantidade por Tipo',
+                          text_auto=True, color='Qtd. Solicitada',
+                          color_continuous_scale='Purples')
+            st.plotly_chart(fig3, use_container_width=True)
 
 # 💰 Gastos
 with aba3:
     st.subheader("💰 Gastos")
-    
+
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado para exibir os gastos.")
     else:
-        # 💸 Gastos por Tipo
+        # Gastos por Tipo
         if 'TIPO' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
             gasto_tipo = df_filtrado.groupby('TIPO')['Valor'].sum().reset_index()
             gasto_tipo['Valor'] = gasto_tipo['Valor'].fillna(0)
-            fig_gt = px.bar(gasto_tipo.sort_values(by='Valor', ascending=False),
-                            x='TIPO', y='Valor',
-                            title='💰 Gastos por Tipo',
-                            text_auto=True,
-                            color='Valor',
-                            color_continuous_scale='Teal')
-            st.plotly_chart(fig_gt, use_container_width=True)
+            fig4 = px.bar(gasto_tipo.sort_values(by='Valor', ascending=False),
+                          x='TIPO', y='Valor',
+                          title='💰 Gastos por Tipo',
+                          text_auto=True, color='Valor',
+                          color_continuous_scale='Teal')
+            st.plotly_chart(fig4, use_container_width=True)
 
-            fig_pizza_tipo = px.pie(gasto_tipo,
-                                    names='TIPO',
-                                    values='Valor',
-                                    title='🧁 Distribuição de Gastos por Tipo')
-            st.plotly_chart(fig_pizza_tipo, use_container_width=True)
+            fig5 = px.pie(gasto_tipo, names='TIPO', values='Valor',
+                          title='🧁 Distribuição de Gastos por Tipo')
+            st.plotly_chart(fig5, use_container_width=True)
 
-        # 🏢 Gastos por Fornecedor
+        # Gastos por Fornecedor
         if 'Fornecedor' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
             gasto_forn = df_filtrado.groupby('Fornecedor')['Valor'].sum().reset_index()
             gasto_forn['Valor'] = gasto_forn['Valor'].fillna(0)
-            fig_forn_gasto = px.bar(gasto_forn.sort_values(by='Valor', ascending=False),
-                                    x='Fornecedor', y='Valor',
-                                    title='🏢 Gastos por Fornecedor',
-                                    text_auto=True,
-                                    color='Valor',
-                                    color_continuous_scale='Blues')
-            st.plotly_chart(fig_forn_gasto, use_container_width=True)
+            fig6 = px.bar(gasto_forn.sort_values(by='Valor', ascending=False),
+                          x='Fornecedor', y='Valor',
+                          title='🏢 Gastos por Fornecedor',
+                          text_auto=True, color='Valor',
+                          color_continuous_scale='Blues')
+            st.plotly_chart(fig6, use_container_width=True)
+```
