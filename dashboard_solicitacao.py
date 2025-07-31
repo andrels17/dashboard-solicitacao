@@ -19,7 +19,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 PRIMARY_COLOR = "#1f77b4"
-ALERT_COLOR = "#d62728"
+ALERT_COLOR   = "#d62728"
 
 # ------------------------------------------------------------
 # Helpers
@@ -38,7 +38,7 @@ def carregar_e_validar_csv(origem: str, destino: str):
     with open(origem, "r", encoding="utf-8") as f_in:
         leitor = csv.reader(f_in, delimiter=sep)
         for linha in leitor:
-            (validas if len(linha) == ncols else invalidas).append(linha)
+            (validas if len(linha)==ncols else invalidas).append(linha)
 
     with open(destino, "w", encoding="utf-8", newline="") as f_out:
         csv.writer(f_out, delimiter=sep).writerows(validas)
@@ -61,8 +61,12 @@ def checkbox_filter(label: str, options: list[str], default: bool = True) -> lis
 def preprocessar(df: pd.DataFrame, freq: str, date_range: tuple):
     d0, d1 = date_range
     mask = df['Data da Solicitação'].between(pd.to_datetime(d0), pd.to_datetime(d1))
-    dff = df.loc[mask].copy()
-    dff["periodo"] = dff["Data da Solicitação"].dt.to_period(freq).dt.to_timestamp()
+    dff  = df.loc[mask].copy()
+    dff["periodo"] = (
+        dff["Data da Solicitação"]
+        .dt.to_period(freq)
+        .dt.to_timestamp()
+    )
     return dff
 
 # ------------------------------------------------------------
@@ -109,7 +113,7 @@ with st.sidebar:
     st.title("Filtros & Opções")
     st.markdown("---")
 
-    tema = st.selectbox("🎨 Tema Plotly", ["plotly_white", "plotly_dark"])
+    tema          = st.selectbox("🎨 Tema Plotly", ["plotly_white", "plotly_dark"])
     sla_threshold = st.slider("⚡ SLA Threshold (dias)", min_value=1, max_value=30, value=7)
     st.markdown("---")
 
@@ -123,8 +127,7 @@ with st.sidebar:
     # Período e granularidade
     datas = df['Data da Solicitação'].dropna()
     if not datas.empty:
-        min_date = datas.min().date()
-        max_date = datas.max().date()
+        min_date, max_date = datas.min().date(), datas.max().date()
     else:
         today = datetime.date.today()
         min_date = max_date = today
@@ -137,7 +140,7 @@ with st.sidebar:
     )
     freq = st.radio(
         "📊 Agregação",
-        options=["D", "W", "M"],
+        options=["D","W","M"],
         format_func=lambda x: {"D":"Diária","W":"Semanal","M":"Mensal"}[x]
     )
     st.markdown("---")
@@ -146,14 +149,14 @@ with st.sidebar:
     equip_list = df['Cód.Equipamento'].dropna().astype(str).unique().tolist()
     sel_equip  = checkbox_filter("Equipamentos", equip_list)
 
-    tipo_list = df.get('TIPO', pd.Series()).dropna().unique().tolist()
-    sel_tipo  = checkbox_filter("Tipo", tipo_list) if tipo_list else []
+    tipo_list  = df.get('TIPO', pd.Series()).dropna().unique().tolist()
+    sel_tipo   = checkbox_filter("Tipo", tipo_list) if tipo_list else []
 
-    sit_list = df.get('SITUAÇÃO', pd.Series()).dropna().unique().tolist()
-    sel_sit   = checkbox_filter("Situação", sit_list) if sit_list else []
+    sit_list   = df.get('SITUAÇÃO', pd.Series()).dropna().unique().tolist()
+    sel_sit    = checkbox_filter("Situação", sit_list) if sit_list else []
 
-    forn_list = df.get('Fornecedor', pd.Series()).dropna().unique().tolist()
-    sel_forn  = checkbox_filter("Fornecedor", forn_list) if forn_list else []
+    forn_list  = df.get('Fornecedor', pd.Series()).dropna().unique().tolist()
+    sel_forn   = checkbox_filter("Fornecedor", forn_list) if forn_list else []
 
     st.markdown("---")
 
@@ -177,21 +180,21 @@ df_seg = preprocessar(df, freq, (data_inicio, data_fim))
 reg_atual = len(df_f)
 reg_prev  = len(df[
     df['Data da Solicitação']
-    .between(
-        pd.to_datetime(data_inicio - (data_fim-data_inicio) - timedelta(days=1)),
-        pd.to_datetime(data_inicio - timedelta(days=1))
-    )
+      .between(
+          pd.to_datetime(data_inicio - (data_fim-data_inicio) - timedelta(days=1)),
+          pd.to_datetime(data_inicio - timedelta(days=1))
+      )
 ])
 sol_atual  = df_f['Cód.Equipamento'].nunique()
-pend_atual = df_f.loc[df_f.get('Qtd. Pendente',0) > 0,'Cód.Equipamento'].nunique()
+pend_atual = df_f.loc[df_f.get('Qtd. Pendente',0)>0,'Cód.Equipamento'].nunique()
 sol_prev   = df['Cód.Equipamento'].nunique()
-pend_prev  = df.loc[df.get('Qtd. Pendente',0) > 0,'Cód.Equipamento'].nunique()
+pend_prev  = df.loc[df.get('Qtd. Pendente',0)>0,'Cód.Equipamento'].nunique()
 sla_atual  = (df_f['Dias em Situação'] <= sla_threshold).mean() if 'Dias em Situação' in df_f else np.nan
 
 # ------------------------------------------------------------
 # 6. Layout com Tabs
 # ------------------------------------------------------------
-tab1, tab2, tab3 = st.tabs(["📍 KPIs", "📊 Gráficos", "📋 Tabela"])
+tab1, tab2, tab3 = st.tabs(["📍 KPIs","📊 Visualização","📋 Tabela"])
 
 with tab1:
     st.markdown("### Principais KPIs")
@@ -202,13 +205,98 @@ with tab1:
     c4.metric(f"✅ SLA (≤{sla_threshold}d)",
               f"{sla_atual:.1%}",
               delta=f"{sla_atual - 0.8:.1%}")
+
     pend_pct = pend_atual/sol_atual if sol_atual else 0
     if pend_pct > 0.2:
         st.warning(f"Atenção: {pend_pct:.1%} pendentes (>20%)")
 
 with tab2:
-    st.markdown("### Gráficos Avançados")
+    # ─────────────────────────────────────────────────────────
+    # Resumo Geral de Pendências
+    # ─────────────────────────────────────────────────────────
+    st.markdown("## 📌 Resumo Geral de Pendências")
 
+    resumo_tipo = (
+        df_f
+        .groupby('TIPO')[['Qtd. Pendente','Valor']]
+        .sum()
+        .rename(columns={"Valor":"Valor Pendente"})
+        .reset_index()
+        .sort_values(by='Valor Pendente', ascending=False)
+    )
+    st.dataframe(
+        resumo_tipo.style.format({
+            "Valor Pendente": "R$ {:,.2f}",
+            "Qtd. Pendente":    "{:,.0f}"
+        }),
+        use_container_width=True
+    )
+
+    top_equip = (
+        df_f
+        .groupby('Cód.Equipamento')[['Qtd. Pendente','Valor']]
+        .sum()
+        .rename(columns={"Valor":"Valor Pendente"})
+        .reset_index()
+        .sort_values(by='Valor Pendente', ascending=False)
+        .head(5)
+    )
+    st.markdown("### 🔝 Top 5 Equipamentos com Mais Valor Pendente (Geral)")
+    st.dataframe(
+        top_equip.style.format({
+            "Valor Pendente": "R$ {:,.2f}",
+            "Qtd. Pendente":    "{:,.0f}"
+        }),
+        use_container_width=True
+    )
+
+    # ─────────────────────────────────────────────────────────
+    # Gráfico Interativo: Top 5 por Tipo
+    # ─────────────────────────────────────────────────────────
+    st.markdown("## 📊 Top 5 Equipamentos com Mais Pendências por Tipo")
+
+    tipo_options  = ["Todos"] + sorted(df_f['TIPO'].dropna().unique().tolist())
+    tipo_selected = st.selectbox("Filtrar por Tipo", tipo_options, key="filtro_tipo_top5")
+    metrica       = st.radio("Métrica", ["Qtd. Pendente","Valor"], key="filtro_metrica_top5")
+
+    df_top = (
+        df_f
+        if tipo_selected=="Todos"
+        else df_f[df_f['TIPO']==tipo_selected]
+    )
+
+    top5 = (
+        df_top
+        .groupby(['Cód.Equipamento','TIPO'])[metrica]
+        .sum()
+        .reset_index()
+        .sort_values(by=metrica, ascending=False)
+        .head(5)
+    )
+
+    fig_top5 = px.bar(
+        top5,
+        x='Cód.Equipamento',
+        y=metrica,
+        color='TIPO',
+        text=metrica,
+        title=f"Top 5 Equipamentos ({metrica}) por Tipo",
+        template=tema,
+        color_discrete_sequence=px.colors.qualitative.Set2
+    )
+    fig_top5.update_traces(textposition='outside')
+    fig_top5.update_layout(
+        yaxis_title="Valor (R$)" if metrica=="Valor" else "Quantidade",
+        xaxis_title="Código do Equipamento",
+        legend_title="Tipo",
+        title_x=0.5
+    )
+    st.plotly_chart(fig_top5, use_container_width=True)
+
+    # ─────────────────────────────────────────────────────────
+    # Demais Gráficos Avançados
+    # ─────────────────────────────────────────────────────────
+    st.markdown("### Gráficos Avançados")
     # Pedidos por Período
     hist = (
         df_f['Data da Solicitação']
@@ -235,26 +323,6 @@ with tab2:
         )
         st.plotly_chart(fig_box, use_container_width=True)
 
-    # Pareto de Pendências
-    if 'Qtd. Pendente' in df_f:
-        pend = df_f.groupby("Cód.Equipamento")["Qtd. Pendente"]\
-                   .sum().sort_values(ascending=False)
-        cum_pct = pend.cumsum()/pend.sum()
-        fig_pareto = go.Figure([
-            go.Bar(x=pend.index, y=pend.values,
-                   name="Pendentes", marker_color=PRIMARY_COLOR),
-            go.Scatter(x=pend.index, y=cum_pct, name="Acumulado %",
-                       yaxis="y2", line_color=ALERT_COLOR)
-        ])
-        fig_pareto.update_layout(
-            title="Pareto de Equipamentos Pendentes",
-            yaxis=dict(title="Qtd. Pendentes"),
-            yaxis2=dict(overlaying="y", side="right",
-                        title="Acumulado %", tickformat=".0%"),
-            template=tema
-        )
-        st.plotly_chart(fig_pareto, use_container_width=True)
-
     # Scatter Valor × Dias
     if 'Valor' in df_f and 'Dias em Situação' in df_f:
         fig_scat = px.scatter(
@@ -279,13 +347,12 @@ with tab2:
         )
         st.plotly_chart(fig_gastos, use_container_width=True)
 
-    # Percentual de Pedidos por Tipo (Pizza) — ajustado
+    # Percentual de Pedidos por Tipo (Pizza)
     if 'TIPO' in df_f:
-        # agrupa e renomeia sem conflitos
         pedidos_tipo = (
             df_f.groupby('TIPO')
-                .size()
-                .reset_index(name='Qtde')
+               .size()
+               .reset_index(name='Qtde')
         )
         if not pedidos_tipo.empty:
             fig_pie = px.pie(
