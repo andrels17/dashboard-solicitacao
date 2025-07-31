@@ -46,18 +46,25 @@ st.sidebar.markdown("🌙 Dica: use extensão como [Dark Reader](https://darkrea
 df = pd.read_csv(arquivo_limpo, sep=sep, encoding="utf-8")
 df.rename(columns={col: col.strip() for col in df.columns}, inplace=True)
 
-# ✨ Renomeia coluna de quantidade automaticamente
+# 🔧 Detecta e renomeia coluna de quantidade
 for col in df.columns:
     col_normalizado = col.lower().replace(" ", "").replace(".", "")
     if "qtde" in col_normalizado or "qtd" in col_normalizado:
         df.rename(columns={col: "Qtd."}, inplace=True)
         break
 
+# 🔧 Detecta e renomeia coluna de valor unitário
+for col in df.columns:
+    col_normalizado = col.lower().replace(" ", "").replace(".", "")
+    if "valorultimacompra" in col_normalizado or "valoru" in col_normalizado or "ultimovalor" in col_normalizado:
+        df.rename(columns={col: "Valor Último"}, inplace=True)
+        break
+
 # 📆 Datas
 df['Data da Solicitação'] = pd.to_datetime(df['Data da Solicitação'], errors='coerce')
 df['AnoMes'] = df['Data da Solicitação'].dt.to_period("M").astype(str)
 
-# 💰 Cálculo da coluna 'Valor'
+# 💰 Cálculo seguro da coluna 'Valor'
 try:
     df['Qtd.'] = pd.to_numeric(df['Qtd.'], errors='coerce')
     df['Valor Último'] = pd.to_numeric(df['Valor Último'], errors='coerce')
@@ -96,7 +103,7 @@ if frota != "Todos": filtro &= (df['Frota'] == frota)
 df_filtrado = df[filtro].copy()
 st.sidebar.write(f"🔎 Registros filtrados: {len(df_filtrado)}")
 
-# 💾 Exportar CSV filtrado
+# 💾 Botão de exportação
 csv_export = df_filtrado.to_csv(index=False).encode('utf-8')
 st.download_button(
     label="📥 Baixar Dados Filtrados (CSV)",
@@ -160,19 +167,4 @@ with aba3:
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado para exibir os gastos.")
     else:
-        if 'TIPO' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
-            gasto_tipo = df_filtrado.groupby('TIPO')['Valor'].sum().reset_index()
-            fig_gt = px.bar(gasto_tipo.sort_values(by='Valor', ascending=False),
-                            x='TIPO', y='Valor',
-                            title='💰 Gastos por Tipo',
-                            text_auto=True,
-                            color='Valor',
-                            color_continuous_scale='Teal')
-            st.plotly_chart(fig_gt, use_container_width=True)
-
-            fig_pizza_tipo = px.pie(df_filtrado,
-                            names='TIPO',
-                            values='Valor',
-                            title='🧁 Distribuição de Gastos por Tipo')
-            st.plotly_chart(fig_pizza_tipo, use_container_width=True)
-
+        if 'TIPO' in df_filtrado.columns and 'Valor'
