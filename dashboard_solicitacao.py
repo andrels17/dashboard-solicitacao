@@ -55,9 +55,8 @@ if all(col in df.columns for col in ['Combustível', 'Manutenção', 'Peças']):
 # 🎛️ Filtros
 st.title("📊 Dashboard de Solicitações TO")
 meses = sorted(df['Mês'].dropna().unique())
-tipos = sorted(df['TIPO'].dropna().unique())
+tipos_disponiveis = sorted(df['TIPO'].dropna().unique())
 fornecedores = sorted(df['Fornecedor'].dropna().unique())
-departamentos = sorted(df['Departamento'].dropna().unique()) if 'Departamento' in df.columns else []
 frotas = sorted(df['Frota'].dropna().unique()) if 'Frota' in df.columns else []
 data_min = df['Data da Solicitação'].min()
 data_max = df['Data da Solicitação'].max()
@@ -65,9 +64,9 @@ data_max = df['Data da Solicitação'].max()
 with st.sidebar:
     st.header("🎛️ Filtros")
     mes = st.selectbox("Mês", meses)
-    tipo = st.selectbox("Tipo", tipos)
+    tipo = st.selectbox("Tipo principal", tipos_disponiveis)
     fornecedor = st.selectbox("Fornecedor", ["Todos"] + fornecedores)
-    selected_departamentos = st.multiselect("Departamento", ["Todos"] + departamentos, default=["Todos"])
+    selected_tipos = st.multiselect("Comparativo por Tipo", ["Todos"] + tipos_disponiveis, default=["Todos"])
     selected_frota = st.selectbox("Frota", ["Todos"] + frotas) if frotas else "Todos"
     data_inicio, data_fim = st.date_input("Período", [data_min, data_max])
 
@@ -80,8 +79,8 @@ filtro = (
 )
 if fornecedor != "Todos":
     filtro &= (df['Fornecedor'] == fornecedor)
-if "Todos" not in selected_departamentos:
-    filtro &= df['Departamento'].isin(selected_departamentos)
+if "Todos" not in selected_tipos:
+    filtro &= df['TIPO'].isin(selected_tipos)
 if selected_frota != "Todos":
     filtro &= (df['Frota'] == selected_frota)
 
@@ -125,21 +124,21 @@ with aba2:
         fig_gastos = px.bar(gastos_por_frota, x='Frota', y='Valor', title='💰 Gastos por Frota')
         st.plotly_chart(fig_gastos)
 
-    if "Todos" in selected_departamentos:
-        st.subheader("📊 Comparativo entre Departamentos")
+    if "Todos" in selected_tipos:
+        st.subheader("📊 Comparativo entre Tipos")
 
-        pendencias_por_dep = df_filtrado.groupby('Departamento')['Qtde. Pendente'].sum().reset_index()
-        fig_pend_dep = px.bar(pendencias_por_dep.sort_values(by='Qtde. Pendente', ascending=False),
-                              x='Departamento', y='Qtde. Pendente',
-                              title='📍 Pendências por Departamento', text_auto=True)
-        st.plotly_chart(fig_pend_dep)
+        pendencias_por_tipo = df_filtrado.groupby('TIPO')['Qtde. Pendente'].sum().reset_index()
+        fig_pend_tipo = px.bar(pendencias_por_tipo.sort_values(by='Qtde. Pendente', ascending=False),
+                               x='TIPO', y='Qtde. Pendente',
+                               title='📍 Pendências por Tipo', text_auto=True)
+        st.plotly_chart(fig_pend_tipo)
 
         if 'Valor' in df_filtrado.columns:
-            gastos_por_dep = df_filtrado.groupby('Departamento')['Valor'].sum().reset_index()
-            fig_gasto_dep = px.bar(gastos_por_dep.sort_values(by='Valor', ascending=False),
-                                   x='Departamento', y='Valor',
-                                   title='💰 Gastos por Departamento', text_auto=True)
-            st.plotly_chart(fig_gasto_dep)
+            gastos_por_tipo = df_filtrado.groupby('TIPO')['Valor'].sum().reset_index()
+            fig_gasto_tipo = px.bar(gastos_por_tipo.sort_values(by='Valor', ascending=False),
+                                    x='TIPO', y='Valor',
+                                    title='💰 Gastos por Tipo', text_auto=True)
+            st.plotly_chart(fig_gasto_tipo)
 
 with aba3:
     st.subheader("📋 Dados Filtrados")
@@ -147,7 +146,7 @@ with aba3:
 
     colunas_exibir = [
         'Alerta', 'Data da Solicitação', 'Descrição', 'Fornecedor',
-        'Departamento', 'Frota', 'Qtde. Solicitada', 'Qtde. Pendente',
+        'TIPO', 'Frota', 'Qtde. Solicitada', 'Qtde. Pendente',
         'Valor', 'OC', 'Status'
     ]
     colunas_exibir = [col for col in colunas_exibir if col in df_filtrado.columns]
