@@ -199,7 +199,7 @@ with aba2:
                           color_continuous_scale='Purples')
             st.plotly_chart(fig3, use_container_width=True)
 
-# dentro do with aba2:
+# Dentro do with aba2:
 # 🔝 Top 10 Equipamentos por Gastos
 if 'Cód.Equipamento' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
     top_gastos = (
@@ -221,6 +221,31 @@ if 'Cód.Equipamento' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
         color_continuous_scale='Viridis'
     )
     st.plotly_chart(fig_equip_gastos, use_container_width=True)
+
+# 🔢 Top 10 Equipamentos com Mais Pedidos Pendentes (Contagem)
+if 'Cód.Equipamento' in df_filtrado.columns and 'Qtd. Pendente' in df_filtrado.columns:
+    # filtra só os registros com pendência
+    df_pendentes = df_filtrado[df_filtrado['Qtd. Pendente'] > 0]
+    top_pend_count = (
+        df_pendentes
+        .groupby('Cód.Equipamento')
+        .size()
+        .reset_index(name='Pedidos Pendentes')
+        .sort_values('Pedidos Pendentes', ascending=False)
+        .head(10)
+    )
+    fig_equip_pend_count = px.bar(
+        top_pend_count,
+        x='Pedidos Pendentes',
+        y='Cód.Equipamento',
+        orientation='h',
+        title='🔝 Top 10 Equipamentos com Mais Pedidos Pendentes (Contagem)',
+        text_auto=True,
+        color='Pedidos Pendentes',
+        color_continuous_scale='Cividis'
+    )
+    st.plotly_chart(fig_equip_pend_count, use_container_width=True)
+
 
 # 🔝 Top 10 Equipamentos com Pedidos Pendentes
 if 'Cód.Equipamento' in df_filtrado.columns and 'Qtd. Pendente' in df_filtrado.columns:
