@@ -108,19 +108,16 @@ st.sidebar.write(f"🔎 Registros filtrados: {len(df_f)}")
 st.sidebar.markdown("---")
 st.sidebar.download_button("📥 Exportar CSV", df_f.to_csv(index=False), "export.csv", "text/csv")
 
-# 6. FUNÇÃO PARA MÉTRICAS (com correção no cálculo de 'Dias em Situação')
+# 6. FUNÇÃO PARA MÉTRICAS
 def calcular_metricas(dframe):
     stats = {}
     stats['qtd_sol'] = int(dframe['Qtd. Solicitada'].sum() or 0)
     stats['qtd_pen'] = int(dframe.get('Qtd. Pendente', pd.Series(dtype=int)).sum() or 0)
     stats['valor']   = float(dframe.get('Valor', pd.Series(dtype=float)).sum() or 0.0)
-
     if 'Dias em Situação' in dframe.columns:
-        # calcula a média somente se a coluna existe
         stats['dias_med'] = float(dframe['Dias em Situação'].mean() or 0.0)
     else:
         stats['dias_med'] = 0.0
-
     return stats
 
 met_atual = calcular_metricas(df_f)
@@ -144,19 +141,31 @@ with aba1:
               delta=met_atual['qtd_pen'] - met_prev['qtd_pen'])
     c3.metric("💸 Valor Total", f"R$ {met_atual['valor']:,.2f}",
               delta=f"R$ {met_atual['valor']-met_prev['valor']:,.2f}")
-    c4.metric("📅 Média Dias",
-              f"{met_atual['dias_med']:.1f} dias",
+    c4.metric("📅 Média Dias", f"{met_atual['dias_med']:.1f} dias",
               delta=f"{met_atual['dias_med']-met_prev['dias_med']:+.1f} dias")
     st.caption("Deltas comparados ao período anterior.")
 
 # 8. ABA DE GRÁFICOS
 with aba2:
     st.subheader("📊 Gráficos de Follow-up")
-    hist = df_f['Data da Solicitação'].dt.date.value_counts().sort_index()
-    fig_tl = px.bar(x=hist.index, y=hist.values,
-                    title="🗓️ Pedidos por Dia",
-                    labels={'x':'Data','y':'Qtde'})
-    fig_tl.update_layout(template=tema)
+
+    # corrige ValueError transformando em DataFrame
+    df_hist = (
+        df_f['Data da Solicitação']
+        .dt.date
+        .value_counts()
+        .sort_index()
+        .rename_axis('Data')
+        .reset_index(name='Qtde')
+    )
+    fig_tl = px.bar(
+        df_hist,
+        x='Data',
+        y='Qtde',
+        title="🗓️ Pedidos por Dia",
+        labels={'Data':'Data','Qtde':'Qtde'},
+        template=tema
+    )
     st.plotly_chart(fig_tl, use_container_width=True)
 
     if 'Dias em Situação' in df_f.columns:
@@ -164,36 +173,54 @@ with aba2:
                         labels=["0–7","8–14","15–30",">30"])
         aging = faixas.value_counts().reindex(["0–7","8–14","15–30",">30"]).reset_index()
         aging.columns = ['Faixa','Qtde']
-        fig_aging = px.bar(aging, x='Faixa', y='Qtde', color='Qtde',
-                           title="⏳ Aging dos Pedidos")
-        fig_aging.update_layout(template=tema)
+        fig_aging = px.bar(
+            aging,
+            x='Faixa',
+            y='Qtde',
+            color='Qtde',
+            title="⏳ Aging dos Pedidos",
+            template=tema
+        )
         st.plotly_chart(fig_aging, use_container_width=True)
 
     if 'Valor' in df_f.columns:
         top_g = df_f.sort_values('Valor', ascending=False).head(10)
-        fig_g = px.bar(top_g, x='Valor', y='Cód.Equipamento', orientation='h',
-                       title="🔝 Top 10 Equipamentos por Gastos",
-                       text_auto='.2f', color='Valor',
-                       color_continuous_scale='Viridis',
-                       template=tema)
+        fig_g = px.bar(
+            top_g,
+            x='Valor',
+            y='Cód.Equipamento',
+            orientation='h',
+            title="🔝 Top 10 Equipamentos por Gastos",
+            text_auto='.2f',
+            color='Valor',
+            color_continuous_scale='Viridis',
+            template=tema
+        )
         fig_g.update_layout(xaxis_tickformat=',.2f')
         st.plotly_chart(fig_g, use_container_width=True)
 
     if 'Qtd. Pendente' in df_f.columns:
         df_f['Qtd. Pendente'] = df_f['Qtd. Pendente'].fillna(0).astype(int)
         top_p = df_f.sort_values('Qtd. Pendente', ascending=False).head(10)
-        fig_p = px.bar(top_p, x='Qtd. Pendente', y='Cód.Equipamento',
-                       orientation='h',
-                       title="🔝 Top 10 Equipamentos com Mais Pendências",
-                       text_auto='.0f', color='Qtd. Pendente',
-                       color_continuous_scale='Cividis',
-                       template=tema)
+        fig_p = px.bar(
+            top_p,
+            x='Qtd. Pendente',
+            y='Cód.Equipamento',
+            orientation='h',
+            title="🔝 Top 10 Equipamentos com Mais Pendências",
+            text_auto='.0f',
+            color='Qtd. Pendente',
+            color_continuous_scale='Cividis',
+            template=tema
+        )
         fig_p.update_layout(xaxis_tickformat=',d')
         st.plotly_chart(fig_p, use_container_width=True)
 
     if 'TIPO' in df_f.columns:
-        tipo_sel = st.selectbox("Drill-down: selecione um Tipo",
-                                ["Todos"] + sorted(df_f['TIPO'].unique().tolist()))
+        tipo_sel = st.selectbox(
+            "Drill-down: selecione um Tipo",
+            ["Todos"] + sorted(df_f['TIPO'].unique().tolist())
+        )
         sub = df_f[df_f['TIPO'] == tipo_sel] if tipo_sel != "Todos" else df_f
         cnt = sub['Cód.Equipamento'].nunique()
         st.caption(f"{cnt} equipamentos em '{tipo_sel}'")
