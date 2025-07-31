@@ -32,7 +32,7 @@ arquivo_original = "solicitacao_to.csv"
 arquivo_limpo = "csv_validado.csv"
 sep, n_colunas, linhas_validas, linhas_invalidas = validar_csv(arquivo_original, arquivo_limpo)
 
-# 🔧 Interface Streamlit
+# 🎨 Interface Streamlit
 st.set_page_config(page_title="Dashboard de Solicitações", layout="wide")
 st.title("📊 Dashboard de Equipamentos")
 st.sidebar.subheader("📎 Relatório do CSV")
@@ -40,12 +40,20 @@ st.sidebar.write(f"Separador detectado: `{sep}`")
 st.sidebar.write(f"Nº de colunas: {n_colunas}")
 st.sidebar.write(f"✔️ Linhas válidas: {len(linhas_validas)}")
 st.sidebar.write(f"❌ Linhas inválidas: {len(linhas_invalidas)}")
-st.sidebar.markdown("🌙 Dica: use extensão como [Dark Reader](https://darkreader.org/) para visualizar em modo escuro.")
+st.sidebar.markdown("🌙 Dica: use extensão como [Dark Reader](https://darkreader.org/) para modo escuro.")
 
 # 📊 Carregamento de dados
 df = pd.read_csv(arquivo_limpo, sep=sep, encoding="utf-8")
 df.rename(columns={col: col.strip() for col in df.columns}, inplace=True)
-df.rename(columns={'Qtd. Solicitada': 'Qtd.'}, inplace=True)
+
+# ✨ Renomeia coluna de quantidade automaticamente
+for col in df.columns:
+    col_normalizado = col.lower().replace(" ", "").replace(".", "")
+    if "qtde" in col_normalizado or "qtd" in col_normalizado:
+        df.rename(columns={col: "Qtd."}, inplace=True)
+        break
+
+# 📆 Datas
 df['Data da Solicitação'] = pd.to_datetime(df['Data da Solicitação'], errors='coerce')
 df['AnoMes'] = df['Data da Solicitação'].dt.to_period("M").astype(str)
 
@@ -88,6 +96,15 @@ if frota != "Todos": filtro &= (df['Frota'] == frota)
 df_filtrado = df[filtro].copy()
 st.sidebar.write(f"🔎 Registros filtrados: {len(df_filtrado)}")
 
+# 💾 Exportar CSV filtrado
+csv_export = df_filtrado.to_csv(index=False).encode('utf-8')
+st.download_button(
+    label="📥 Baixar Dados Filtrados (CSV)",
+    data=csv_export,
+    file_name="dados_filtrados.csv",
+    mime="text/csv"
+)
+
 # 📚 Abas visuais
 aba1, aba2, aba3 = st.tabs(["📍 Indicadores", "📊 Gráficos", "💰 Gastos"])
 
@@ -95,7 +112,6 @@ with aba1:
     st.subheader("📍 Indicadores")
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado encontrado com os filtros selecionados.")
-        st.image("https://i.imgur.com/xY9cQkB.png", caption="Tente ajustar os filtros.")
     else:
         if 'Qtd.' in df_filtrado.columns:
             st.metric("Solicitado", int(df_filtrado['Qtd.'].sum()))
@@ -143,7 +159,6 @@ with aba3:
     st.subheader("💰 Gastos")
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado para exibir os gastos.")
-        st.image("https://i.imgur.com/xY9cQkB.png", caption="Tente ajustar os filtros.")
     else:
         if 'TIPO' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
             gasto_tipo = df_filtrado.groupby('TIPO')['Valor'].sum().reset_index()
@@ -155,8 +170,4 @@ with aba3:
                             color_continuous_scale='Teal')
             st.plotly_chart(fig_gt, use_container_width=True)
 
-            fig_pizza_tipo = px.pie(df_filtrado,
-                                    names='TIPO',
-                                    values='Valor',
-                                    title='🧁 Distribuição de Gastos por Tipo')
-            st.plotly_chart(fig_pizza_tipo, use_container_width=True)
+            fig_pizza_tipo =
