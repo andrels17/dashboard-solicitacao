@@ -57,6 +57,15 @@ if 'Qtd.' in df.columns and 'Valor Último' in df.columns:
 if 'Dias em Situação' in df.columns:
     df['Alerta Dias'] = df['Dias em Situação'].apply(lambda x: '⚠️' if x >= 30 else '')
 
+st.subheader("🧪 Diagnóstico inicial")
+st.write(f"Registros lidos: {len(df)}")
+st.write("📅 Intervalo de datas detectado:")
+st.write(f"De {df['Data da Solicitação'].min()} até {df['Data da Solicitação'].max()}")
+
+st.write("🔍 Primeiros registros:")
+st.dataframe(df.head())
+
+
 # 🎛️ Filtros
 tipos = sorted(df['TIPO'].dropna().unique()) if 'TIPO' in df.columns else []
 fornecedores = sorted(df['Fornecedor'].dropna().unique()) if 'Fornecedor' in df.columns else []
