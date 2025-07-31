@@ -32,24 +32,24 @@ arquivo_original = "solicitacao_to.csv"
 arquivo_limpo = "csv_validado.csv"
 sep, n_colunas, linhas_validas, linhas_invalidas = validar_csv(arquivo_original, arquivo_limpo)
 
-# 🔧 Configuração da interface
+# 🔧 Interface Streamlit
 st.set_page_config(page_title="Dashboard de Solicitações", layout="wide")
 st.title("📊 Dashboard de Equipamentos")
-
-# 📎 Diagnóstico lateral
 st.sidebar.subheader("📎 Relatório do CSV")
 st.sidebar.write(f"Separador detectado: `{sep}`")
 st.sidebar.write(f"Nº de colunas: {n_colunas}")
 st.sidebar.write(f"✔️ Linhas válidas: {len(linhas_validas)}")
 st.sidebar.write(f"❌ Linhas inválidas: {len(linhas_invalidas)}")
+st.sidebar.markdown("🌙 Dica: use extensão como [Dark Reader](https://darkreader.org/) para visualizar em modo escuro.")
 
 # 📊 Carregamento de dados
 df = pd.read_csv(arquivo_limpo, sep=sep, encoding="utf-8")
 df.rename(columns={col: col.strip() for col in df.columns}, inplace=True)
+df.rename(columns={'Qtd. Solicitada': 'Qtd.'}, inplace=True)
 df['Data da Solicitação'] = pd.to_datetime(df['Data da Solicitação'], errors='coerce')
 df['AnoMes'] = df['Data da Solicitação'].dt.to_period("M").astype(str)
 
-# 💰 Criação segura da coluna 'Valor'
+# 💰 Cálculo da coluna 'Valor'
 try:
     df['Qtd.'] = pd.to_numeric(df['Qtd.'], errors='coerce')
     df['Valor Último'] = pd.to_numeric(df['Valor Último'], errors='coerce')
@@ -97,8 +97,8 @@ with aba1:
         st.warning("⚠️ Nenhum dado encontrado com os filtros selecionados.")
         st.image("https://i.imgur.com/xY9cQkB.png", caption="Tente ajustar os filtros.")
     else:
-        if 'Qtd. Solicitada' in df_filtrado.columns:
-            st.metric("Solicitado", int(df_filtrado['Qtd. Solicitada'].sum()))
+        if 'Qtd.' in df_filtrado.columns:
+            st.metric("Solicitado", int(df_filtrado['Qtd.'].sum()))
         if 'Qtd. Pendente' in df_filtrado.columns:
             st.metric("Pendente", int(df_filtrado['Qtd. Pendente'].sum()))
         if 'Valor' in df_filtrado.columns:
@@ -155,5 +155,18 @@ with aba3:
                             color_continuous_scale='Teal')
             st.plotly_chart(fig_gt, use_container_width=True)
 
+                        fig_pizza_tipo = px.pie(df_filtrado,
+                                    names='TIPO',
+                                    values='Valor',
+                                    title='🧁 Distribuição de Gastos por Tipo')
+            st.plotly_chart(fig_pizza_tipo, use_container_width=True)
+
         if 'Fornecedor' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
-            gasto_forn = df_fil
+            gasto_forn = df_filtrado.groupby('Fornecedor')['Valor'].sum().reset_index()
+            fig_forn_gasto = px.bar(gasto_forn.sort_values(by='Valor', ascending=False),
+                                    x='Fornecedor', y='Valor',
+                                    title='🏢 Gastos por Fornecedor',
+                                    text_auto=True,
+                                    color='Valor',
+                                    color_continuous_scale='Blues')
+            st.plotly_chart(fig_forn_gasto, use_container_width=True)
