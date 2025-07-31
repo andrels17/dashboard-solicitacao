@@ -55,7 +55,6 @@ def checkbox_filter(label: str, options: list[str], default: bool = True) -> lis
 # ------------------------------------------------------------
 origem  = "solicitacao_to.csv"
 destino = "csv_validado.csv"
-
 if not os.path.exists(origem):
     st.error(f"Arquivo não encontrado: {origem}")
     st.stop()
@@ -86,6 +85,7 @@ for col in df.columns:
 df.rename(columns=rename_map, inplace=True)
 df = df.loc[:, ~df.columns.duplicated()]
 
+# conversões
 df['Data da Solicitação'] = pd.to_datetime(df['Data da Solicitação'], errors='coerce')
 if "Valor Último" in df and "Qtd. Solicitada" in df:
     df['Valor Último']    = pd.to_numeric(df['Valor Último'], errors='coerce')
@@ -113,8 +113,8 @@ with st.sidebar:
         min_date = datas.min().date()
         max_date = datas.max().date()
     else:
-        hoje = datetime.date.today()
-        min_date = max_date = hoje
+        today = datetime.date.today()
+        min_date = max_date = today
 
     data_inicio, data_fim = st.date_input(
         "Período",
@@ -169,53 +169,71 @@ with st.sidebar:
     st.download_button("📥 Exportar CSV", df_f.to_csv(index=False), "export.csv")
 
 # ------------------------------------------------------------
-# 6. Métricas
+# 6. Métricas: agora usando contagens em vez de somas
 # ------------------------------------------------------------
 def calcular_metricas(d):
+    # número de registros (linhas)
+    num_registros = len(d)
+    # contagem de equipamentos distintos solicitados
+    qtd_solicitados = d['Cód.Equipamento'].nunique()
+    # contagem de equipamentos pendentes (pendente > 0)
+    if 'Qtd. Pendente' in d:
+        qtd_pendentes = d.loc[d['Qtd. Pendente'] > 0, 'Cód.Equipamento'].nunique()
+    else:
+        qtd_pendentes = 0
+    # valor total (soma de Valor = unitário × qtd solicitada)
+    valor_total = float(d.get('Valor', pd.Series(dtype=float)).sum() or 0.0)
+
     return {
-        'qtd_sol':  int(d['Qtd. Solicitada'].sum() or 0),
-        'qtd_pen':  int(d.get('Qtd. Pendente', pd.Series(dtype=int)).sum() or 0),
-        'valor':    float(d.get('Valor', pd.Series(dtype=float)).sum() or 0.0),
-        'dias_med': float(d['Dias em Situação'].mean() or 0.0)
-                    if 'Dias em Situação' in d else 0.0
+        'num_reg': num_registros,
+        'qtd_solic': qtd_solicitados,
+        'qtd_pend': qtd_pendentes,
+        'valor': valor_total
     }
 
-met_atual  = calcular_metricas(df_f)
-delta      = data_fim - data_inicio
-prev_start = data_inicio - delta - timedelta(days=1)
-prev_end   = data_inicio - timedelta(days=1)
+metrics_atual = calcular_metricas(df_f)
 
-# Converte limites para Timestamp antes de usar between
-prev_start_ts = pd.to_datetime(prev_start)
-prev_end_ts   = pd.to_datetime(prev_end)
-
+# período anterior
+delta = data_fim - data_inicio
+prev_start = pd.to_datetime(data_inicio - delta - timedelta(days=1))
+prev_end   = pd.to_datetime(data_inicio - timedelta(days=1))
 df_prev = df[
-    df['Data da Solicitação']
-      .between(prev_start_ts, prev_end_ts)
+    df['Data da Solicitação'].between(prev_start, prev_end)
 ]
-met_prev = calcular_metricas(df_prev)
+metrics_prev = calcular_metricas(df_prev)
 
 # ------------------------------------------------------------
-# 7. TABS: KPIs, Gráficos e Tabela
+# 7. Aba de KPIs, Gráficos e Tabela
 # ------------------------------------------------------------
-aba1, aba2, aba3 = st.tabs(["📍 KPIs", "📊 Gráficos", "📋 Tabela Interativa"])
+aba1, aba2, aba3 = st.tabs(["📍 KPIs", "📊 Gráficos", "📋 Tabela"])
 
 with aba1:
     st.subheader("📍 Principais KPIs")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("📦 Solicitado", met_atual['qtd_sol'],
-              delta=met_atual['qtd_sol']-met_prev['qtd_sol'])
-    c2.metric("⏳ Pendentes", met_atual['qtd_pen'],
-              delta=met_atual['qtd_pen']-met_prev['qtd_pen'])
-    c3.metric("💸 Valor Total", f"R$ {met_atual['valor']:,.2f}",
-              delta=f"R$ {met_atual['valor']-met_prev['valor']:,.2f}")
-    c4.metric("📅 Média Dias",
-              f"{met_atual['dias_med']:.1f} dias",
-              delta=f"{met_atual['dias_med']-met_prev['dias_med']:+.1f} dias")
-    st.caption("Comparação com o período anterior")
+    c1.metric(
+        label="📝 Registros",
+        value=metrics_atual['num_reg'],
+        delta=metrics_atual['num_reg']-metrics_prev['num_reg']
+    )
+    c2.metric(
+        label="🔢 Materiais Solicitados (distintos)",
+        value=metrics_atual['qtd_solic'],
+        delta=metrics_atual['qtd_solic']-metrics_prev['qtd_solic']
+    )
+    c3.metric(
+        label="⏳ Materiais Pendentes (distintos)",
+        value=metrics_atual['qtd_pend'],
+        delta=metrics_atual['qtd_pend']-metrics_prev['qtd_pend']
+    )
+    c4.metric(
+        label="💰 Valor Total (R$)",
+        value=f"{metrics_atual['valor']:,.2f}",
+        delta=f"{metrics_atual['valor']-metrics_prev['valor']:,.2f}"
+    )
+    st.caption("Comparado ao período anterior")
 
 with aba2:
-    st.subheader("📊 Pedidos por Dia")
+    st.subheader("Pedidos por Dia")
     df_hist = (
         df_f['Data da Solicitação']
         .dt.date
@@ -224,45 +242,14 @@ with aba2:
         .rename_axis('Data')
         .reset_index(name='Qtde')
     )
-    fig_tl = px.bar(df_hist, x='Data', y='Qtde',
-                    title="🗓️ Pedidos por Dia",
-                    template=tema)
-    st.plotly_chart(fig_tl, use_container_width=True)
+    fig = px.bar(df_hist, x='Data', y='Qtde',
+                 title="🗓️ Pedidos por Dia", template=tema)
+    st.plotly_chart(fig, use_container_width=True)
 
-    if 'Dias em Situação' in df_f:
-        st.subheader("⏳ Aging dos Pedidos")
-        faixas = pd.cut(df_f['Dias em Situação'],
-                        bins=[0,7,14,30,999],
-                        labels=["0–7","8–14","15–30",">30"])
-        aging = faixas.value_counts().reindex(
-            ["0–7","8–14","15–30",">30"]
-        ).reset_index()
-        aging.columns = ['Faixa','Qtde']
-        fig_aging = px.bar(aging, x='Faixa', y='Qtde', color='Qtde',
-                           template=tema)
-        st.plotly_chart(fig_aging, use_container_width=True)
-
-    if 'Valor' in df_f:
-        st.subheader("🔝 Top 10 Equipamentos por Gastos")
-        top_g = df_f.nlargest(10, 'Valor')
-        fig_g = px.bar(top_g, x='Valor', y='Cód.Equipamento',
-                       orientation='h', text_auto='.2f', color='Valor',
-                       color_continuous_scale='Viridis', template=tema)
-        fig_g.update_layout(xaxis_tickformat=',.2f')
-        st.plotly_chart(fig_g, use_container_width=True)
-
-    if 'Qtd. Pendente' in df_f:
-        st.subheader("🔝 Top 10 Equipamentos com Pendências")
-        df_f['Qtd. Pendente'] = df_f['Qtd. Pendente'].fillna(0).astype(int)
-        top_p = df_f.nlargest(10, 'Qtd. Pendente')
-        fig_p = px.bar(top_p, x='Qtd. Pendente', y='Cód.Equipamento',
-                       orientation='h', text_auto='.0f', color='Qtd. Pendente',
-                       color_continuous_scale='Cividis', template=tema)
-        fig_p.update_layout(xaxis_tickformat=',d')
-        st.plotly_chart(fig_p, use_container_width=True)
+    # outros gráficos…
 
 with aba3:
-    st.subheader("📋 Detalhamento e Follow-up")
+    st.subheader("📋 Detalhamento Interativo")
     gb = GridOptionsBuilder.from_dataframe(df_f)
     gb.configure_pagination(paginationAutoPageSize=True)
     gb.configure_side_bar()
