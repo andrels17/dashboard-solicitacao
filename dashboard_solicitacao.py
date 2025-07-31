@@ -48,7 +48,7 @@ st.sidebar.markdown("🌙 Dica: use extensão como [Dark Reader](https://darkrea
 df = pd.read_csv(arquivo_limpo, sep=sep, encoding="utf-8")
 df.rename(columns={col: col.strip() for col in df.columns}, inplace=True)
 
-# 🔧 Renomeia automaticamente 'Qtd.' e 'Valor Último'
+# 🔧 Renomeia 'Qtd.' e 'Valor Último'
 for col in df.columns:
     col_limpo = unidecode.unidecode(col.lower().replace(" ", "").replace(".", ""))
     if "qtde" in col_limpo or "qtd" in col_limpo:
@@ -70,7 +70,7 @@ except Exception as e:
 
 # ⚠️ Alerta de dias em situação
 if 'Dias em Situação' in df.columns:
-    df['Alerta Dias'] = df['Dias em Situação'].apply(lambda x: '⚠️' if x >= 30 else '')
+    df['Alerta Dias'] = pd.to_numeric(df['Dias em Situação'], errors='coerce').apply(lambda x: '⚠️' if x >= 30 else '')
 
 # 🎛️ Filtros
 tipos = sorted(df['TIPO'].dropna().unique()) if 'TIPO' in df.columns else []
@@ -114,17 +114,28 @@ aba1, aba2, aba3 = st.tabs(["📍 Indicadores", "📊 Gráficos", "💰 Gastos"]
 # 🔢 Indicadores
 with aba1:
     st.subheader("📍 Indicadores")
+
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado encontrado com os filtros.")
     else:
-        if 'Qtd.' in df_filtrado.columns:
-            st.metric("Solicitado", int(df_filtrado['Qtd.'].sum()))
+        qtd_solicitada = df_filtrado['Qtd.'].sum()
+        qtd_solicitada = 0 if pd.isna(qtd_solicitada) else int(qtd_solicitada)
+        st.metric("📦 Solicitado", qtd_solicitada)
+
         if 'Qtd. Pendente' in df_filtrado.columns:
-            st.metric("Pendente", int(df_filtrado['Qtd. Pendente'].sum()))
+            qtd_pendente = df_filtrado['Qtd. Pendente'].sum()
+            qtd_pendente = 0 if pd.isna(qtd_pendente) else int(qtd_pendente)
+            st.metric("⏳ Pendente", qtd_pendente)
+
         if 'Valor' in df_filtrado.columns:
-            st.metric("Valor Total", f"R$ {df_filtrado['Valor'].sum():,.2f}")
+            valor_total = df_filtrado['Valor'].sum()
+            valor_total = 0.0 if pd.isna(valor_total) else valor_total
+            st.metric("💸 Valor Total", f"R$ {valor_total:,.2f}")
+
         if 'Dias em Situação' in df_filtrado.columns:
-            st.metric("Média Dias em Situação", f"{df_filtrado['Dias em Situação'].mean():.1f} dias")
+            media_dias = df_filtrado['Dias em Situação'].mean()
+            media_dias = 0.0 if pd.isna(media_dias) else media_dias
+            st.metric("📅 Média Dias", f"{media_dias:.1f} dias")
 
 # 📊 Gráficos
 with aba2:
@@ -134,8 +145,7 @@ with aba2:
     else:
         if 'AnoMes' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
             valor_mensal = df_filtrado.groupby('AnoMes')['Valor'].sum().reset_index()
-            fig_valor_mes = px.line(valor_mensal, x='AnoMes', y='Valor', markers=True,
-                                    title='📈 Valor por Mês')
+            fig_valor_mes = px.line(valor_mensal, x='AnoMes', y='Valor', markers=True, title='📈 Valor por Mês')
             st.plotly_chart(fig_valor_mes, use_container_width=True)
 
         if 'Fornecedor' in df_filtrado.columns and 'Qtd. Pendente' in df_filtrado.columns:
@@ -159,13 +169,17 @@ with aba2:
                               color_continuous_scale='Purples')
             st.plotly_chart(fig_tipo, use_container_width=True)
 
+# 💰 Gastos
 with aba3:
     st.subheader("💰 Gastos")
+    
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado para exibir os gastos.")
     else:
+        # 💸 Gastos por Tipo
         if 'TIPO' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
             gasto_tipo = df_filtrado.groupby('TIPO')['Valor'].sum().reset_index()
+            gasto_tipo['Valor'] = gasto_tipo['Valor'].fillna(0)
             fig_gt = px.bar(gasto_tipo.sort_values(by='Valor', ascending=False),
                             x='TIPO', y='Valor',
                             title='💰 Gastos por Tipo',
@@ -174,14 +188,16 @@ with aba3:
                             color_continuous_scale='Teal')
             st.plotly_chart(fig_gt, use_container_width=True)
 
-            fig_pizza_tipo = px.pie(df_filtrado,
+            fig_pizza_tipo = px.pie(gasto_tipo,
                                     names='TIPO',
                                     values='Valor',
                                     title='🧁 Distribuição de Gastos por Tipo')
             st.plotly_chart(fig_pizza_tipo, use_container_width=True)
 
+        # 🏢 Gastos por Fornecedor
         if 'Fornecedor' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
             gasto_forn = df_filtrado.groupby('Fornecedor')['Valor'].sum().reset_index()
+            gasto_forn['Valor'] = gasto_forn['Valor'].fillna(0)
             fig_forn_gasto = px.bar(gasto_forn.sort_values(by='Valor', ascending=False),
                                     x='Fornecedor', y='Valor',
                                     title='🏢 Gastos por Fornecedor',
