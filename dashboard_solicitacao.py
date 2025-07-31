@@ -103,13 +103,14 @@ if 'Dias em Situação' in df:
     df['Dias em Situação'] = pd.to_numeric(df['Dias em Situação'], errors='coerce')
 
 # ------------------------------------------------------------
-# 3. Sidebar: configuração de visualização e filtros
+# 3. Sidebar: filtros & opções adicionais
 # ------------------------------------------------------------
 with st.sidebar:
     st.title("Filtros & Opções")
     st.markdown("---")
 
     tema = st.selectbox("🎨 Tema Plotly", ["plotly_white", "plotly_dark"])
+    sla_threshold = st.slider("⚡ SLA Threshold (dias)", min_value=1, max_value=30, value=7)
     st.markdown("---")
 
     st.subheader("📎 Info do CSV")
@@ -167,18 +168,13 @@ if sel_tipo: mask &= df['TIPO'].isin(sel_tipo)
 if sel_sit:  mask &= df['SITUAÇÃO'].isin(sel_sit)
 if sel_forn: mask &= df['Fornecedor'].isin(sel_forn)
 
-df_f = df.loc[mask].copy()
+df_f   = df.loc[mask].copy()
 df_seg = preprocessar(df, freq, (data_inicio, data_fim))
 
 # ------------------------------------------------------------
-# 5. Métricas atuais x período anterior
+# 5. Calcula KPIs atuais x período anterior
 # ------------------------------------------------------------
-def calc_kpis(ser):
-    total = ser.count()  # count of non-null
-    pend = (ser > 0).sum()
-    return total, pend
-
-# KPI sobre registros
+# registros
 reg_atual = len(df_f)
 reg_prev = len(df[
     df['Data da Solicitação']
@@ -188,48 +184,42 @@ reg_prev = len(df[
     )
 ])
 
-# KPI distinct equipment solicitado x pendente
-sol_atual = df_f['Cód.Equipamento'].nunique()
+# solicitados / pendentes distintos
+sol_atual  = df_f['Cód.Equipamento'].nunique()
 pend_atual = df_f.loc[df_f.get('Qtd. Pendente',0) > 0,'Cód.Equipamento'].nunique()
-sol_prev = df['Cód.Equipamento'].nunique()  # simplificado
+# para comparação simplificada usamos totais globais
+sol_prev  = df['Cód.Equipamento'].nunique()
 pend_prev = df.loc[df.get('Qtd. Pendente',0) > 0,'Cód.Equipamento'].nunique()
 
-# SLA (<7 dias)
-sla_atual = (df_f['Dias em Situação'] <= 7).mean() if 'Dias em Situação' in df_f else np.nan
+# SLA baseado no threshold
+if 'Dias em Situação' in df_f:
+    sla_atual = (df_f['Dias em Situação'] <= sla_threshold).mean()
+else:
+    sla_atual = np.nan
 
 # ------------------------------------------------------------
-# 6. Tabs: KPIs, Gráficos e Tabela
+# 6. Layout com Tabs
 # ------------------------------------------------------------
 tab1, tab2, tab3 = st.tabs(["📍 KPIs", "📊 Gráficos", "📋 Tabela"])
 
 with tab1:
-    st.markdown("## Principais KPIs")
+    st.markdown("### Principais KPIs")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("📝 Registros", reg_atual, delta=reg_atual-reg_prev)
     c2.metric("🔢 Solicitados (distintos)", sol_atual, delta=sol_atual-sol_prev)
     c3.metric("⏳ Pendentes (distintos)", pend_atual, delta=pend_atual-pend_prev)
-    c4.metric("✅ SLA (<7d)", f"{sla_atual:.1%}", delta=f"{sla_atual - 0.8:.1%}")
+    c4.metric(f"✅ SLA (<={sla_threshold}d)", 
+              f"{sla_atual:.1%}", 
+              delta=f"{sla_atual - 0.8:.1%}")
     st.caption("Comparado ao período anterior")
 
     pend_pct = pend_atual/sol_atual if sol_atual else 0
     if pend_pct > 0.2:
-        st.warning(f"Atenção: {pend_pct:.1%} dos equipamentos pendentes (>20%)")
-        # exemplo de integração Slack
-        webhook = os.getenv("SLACK_WEBHOOK_URL")
-        if webhook:
-            import requests
-            requests.post(webhook, json={"text": f"⚠️ {pend_pct:.1%} pendentes no dashboard."})
-
-    st.markdown("""
-    **Interprete seus resultados:**
-    - Registros mostram volume bruto.
-    - Distintos solicitados x pendentes trazem eficiência.
-    - SLA indica porcentagem dentro de 7 dias.
-    """)
+        st.warning(f"Atenção: {pend_pct:.1%} pendentes (>20%)")
 
 with tab2:
-    st.markdown("## Gráficos Avançados")
-    # Pedidos ao longo do tempo
+    st.markdown("### Gráficos Avançados")
+    # 2.1 Histograma por período
     hist = (
         df_f['Data da Solicitação']
         .dt.to_period(freq)
@@ -244,58 +234,59 @@ with tab2:
                       color_discrete_sequence=[PRIMARY_COLOR])
     st.plotly_chart(fig_hist, use_container_width=True)
 
-    # Heatmap de Dias em Situação vs Equipamento
-    if 'Dias em Situação' in df_seg:
-        fig_heat = px.density_heatmap(
-            df_seg, x="Cód.Equipamento", y="Dias em Situação",
-            color_continuous_scale="Blues",
-            title="Heatmap: Equipamento x Dias em Situação"
+    # 2.2 Box-Plot: distribuição de atrasos
+    if 'Dias em Situação' in df_f:
+        fig_box = px.box(
+            df_f, x="Cód.Equipamento", y="Dias em Situação",
+            title="Distribuição de Atrasos por Equipamento",
+            template=tema
         )
-        st.plotly_chart(fig_heat, use_container_width=True)
+        st.plotly_chart(fig_box, use_container_width=True)
 
-    # Gráfico de Controle
-    if 'Dias em Situação' in df_seg:
-        ctl = df_seg.groupby("periodo")["Dias em Situação"].mean().reset_index()
-        mean = ctl["Dias em Situação"].mean()
-        std = ctl["Dias em Situação"].std()
-        ucl = mean + 3*std
-        lcl = mean - 3*std
-        fig_ctrl = go.Figure([
-            go.Scatter(x=ctl["periodo"], y=ctl["Dias em Situação"],
-                       mode="lines+markers", name="Média Dias"),
-            go.layout.Shape(type="line",
-                            x0=ctl["periodo"].min(), x1=ctl["periodo"].max(),
-                            y0=ucl, y1=ucl, line=dict(color=ALERT_COLOR, dash="dash")),
-            go.layout.Shape(type="line",
-                            x0=ctl["periodo"].min(), x1=ctl["periodo"].max(),
-                            y0=lcl, y1=lcl, line=dict(color="green", dash="dash"))
-        ])
-        fig_ctrl.update_layout(title="Gráfico de Controle", xaxis_title="Período", yaxis_title="Dias")
-        st.plotly_chart(fig_ctrl, use_container_width=True)
-
-    # Gauge SLA
-    if not np.isnan(sla_atual):
-        fig_gauge = go.Figure(go.Indicator(
-            mode="gauge+number+delta",
-            value=sla_atual*100,
-            delta={'reference': 80, 'suffix': "%"},
-            gauge={'axis': {'range': [0,100]},
-                   'bar': {'color': PRIMARY_COLOR},
-                   'steps': [
-                       {'range': [0,80], 'color': "lightgray"},
-                       {'range': [80,100], 'color': "lightgreen"}]},
-            title={'text': "SLA (<7 dias)"}
+    # 2.3 Pareto de pendências
+    if 'Qtd. Pendente' in df_f:
+        pend = df_f.groupby("Cód.Equipamento")["Qtd. Pendente"] \
+                   .sum().sort_values(ascending=False)
+        cum_pct = pend.cumsum() / pend.sum()
+        fig_pareto = go.Figure()
+        fig_pareto.add_trace(go.Bar(
+            x=pend.index, y=pend.values, name="Pendentes",
+            marker_color=PRIMARY_COLOR))
+        fig_pareto.add_trace(go.Scatter(
+            x=pend.index, y=cum_pct,
+            name="Acumulado %",
+            yaxis="y2",
+            line_color=ALERT_COLOR
         ))
-        st.plotly_chart(fig_gauge, use_container_width=True)
+        fig_pareto.update_layout(
+            title="Pareto de Equipamentos Pendentes",
+            yaxis=dict(title="Qtd. Pendentes"),
+            yaxis2=dict(
+                title="Acumulado %",
+                overlaying="y",
+                side="right",
+                tickformat=".0%"
+            ),
+            template=tema
+        )
+        st.plotly_chart(fig_pareto, use_container_width=True)
+
+    # 2.4 Scatter Valor × Dias
+    if 'Valor' in df_f and 'Dias em Situação' in df_f:
+        fig_scat = px.scatter(
+            df_f, x="Valor", y="Dias em Situação",
+            color="SITUAÇÃO" if 'SITUAÇÃO' in df_f else None,
+            size="Qtd. Solicitada" if 'Qtd. Solicitada' in df_f else None,
+            title="Valor da Solicitação vs Dias em Situação",
+            template=tema,
+            hover_data=["Cód.Equipamento"]
+        )
+        st.plotly_chart(fig_scat, use_container_width=True)
 
 with tab3:
-    st.markdown("## Detalhamento Interativo")
-    # Drill‐down via clique no gráfico de histograma
-    click = st.session_state.get("clickData", None)
-    st.caption("Clique em uma barra no gráfico anterior para filtrar a tabela abaixo.")
+    st.markdown("### Detalhamento Interativo")
     gb = GridOptionsBuilder.from_dataframe(df_f)
     gb.configure_pagination(paginationAutoPageSize=True)
     gb.configure_side_bar()
     AgGrid(df_f, gridOptions=gb.build(), theme="alpine")
-
     st.download_button("📥 Exportar CSV Filtrado", df_f.to_csv(index=False), "filtro_export.csv")
