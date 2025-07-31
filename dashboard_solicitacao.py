@@ -199,6 +199,52 @@ with aba2:
                           color_continuous_scale='Purples')
             st.plotly_chart(fig3, use_container_width=True)
 
+# dentro do with aba2:
+# 🔝 Top 10 Equipamentos por Gastos
+if 'Cód.Equipamento' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
+    top_gastos = (
+        df_filtrado
+        .groupby('Cód.Equipamento')['Valor']
+        .sum()
+        .reset_index()
+        .sort_values('Valor', ascending=False)
+        .head(10)
+    )
+    fig_equip_gastos = px.bar(
+        top_gastos,
+        x='Valor',
+        y='Cód.Equipamento',
+        orientation='h',
+        title='🔝 Top 10 Equipamentos por Gastos',
+        text_auto=True,
+        color='Valor',
+        color_continuous_scale='Viridis'
+    )
+    st.plotly_chart(fig_equip_gastos, use_container_width=True)
+
+# 🔝 Top 10 Equipamentos com Pedidos Pendentes
+if 'Cód.Equipamento' in df_filtrado.columns and 'Qtd. Pendente' in df_filtrado.columns:
+    top_pend = (
+        df_filtrado
+        .groupby('Cód.Equipamento')['Qtd. Pendente']
+        .sum()
+        .reset_index()
+        .sort_values('Qtd. Pendente', ascending=False)
+        .head(10)
+    )
+    fig_equip_pend = px.bar(
+        top_pend,
+        x='Qtd. Pendente',
+        y='Cód.Equipamento',
+        orientation='h',
+        title='🔝 Top 10 Equipamentos com Pendências',
+        text_auto=True,
+        color='Qtd. Pendente',
+        color_continuous_scale='Cividis'
+    )
+    st.plotly_chart(fig_equip_pend, use_container_width=True)
+
+
 # 💰 Gastos
 with aba3:
     st.subheader("💰 Gastos")
