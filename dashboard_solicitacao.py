@@ -140,10 +140,25 @@ with aba2:
                                    x='Departamento', y='Valor',
                                    title='💰 Gastos por Departamento', text_auto=True)
             st.plotly_chart(fig_gasto_dep)
-
-with aba3:
+            
+    with aba3:
     st.subheader("📋 Dados Filtrados")
     st.caption(f"{len(df_filtrado)} registros encontrados")
 
-    colunas_exibir = ['Alerta', 'Data da Solicitação', 'Descrição', 'Fornecedor',
-                      'Departamento', 'Frota', 'Qtde. Solicitada', 'Qtde. Pendente',
+    colunas_exibir = [
+        'Alerta', 'Data da Solicitação', 'Descrição', 'Fornecedor',
+        'Departamento', 'Frota', 'Qtde. Solicitada', 'Qtde. Pendente',
+        'Valor', 'OC', 'Status'
+    ]
+    colunas_exibir = [col for col in colunas_exibir if col in df_filtrado.columns]
+
+    st.dataframe(df_filtrado[colunas_exibir])
+
+    # 📥 Botão de download
+    st.download_button(
+        label="📥 Baixar CSV filtrado",
+        data=df_filtrado.to_csv(index=False).encode('utf-8'),
+        file_name="dados_filtrados.csv",
+        mime="text/csv"
+    )
+
