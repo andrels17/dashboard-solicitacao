@@ -155,18 +155,8 @@ with aba3:
                             color_continuous_scale='Teal')
             st.plotly_chart(fig_gt, use_container_width=True)
 
-                        fig_pizza_tipo = px.pie(df_filtrado,
+            fig_pizza_tipo = px.pie(df_filtrado,
                                     names='TIPO',
                                     values='Valor',
                                     title='🧁 Distribuição de Gastos por Tipo')
             st.plotly_chart(fig_pizza_tipo, use_container_width=True)
-
-        if 'Fornecedor' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
-            gasto_forn = df_filtrado.groupby('Fornecedor')['Valor'].sum().reset_index()
-            fig_forn_gasto = px.bar(gasto_forn.sort_values(by='Valor', ascending=False),
-                                    x='Fornecedor', y='Valor',
-                                    title='🏢 Gastos por Fornecedor',
-                                    text_auto=True,
-                                    color='Valor',
-                                    color_continuous_scale='Blues')
-            st.plotly_chart(fig_forn_gasto, use_container_width=True)
