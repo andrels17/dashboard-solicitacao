@@ -118,24 +118,41 @@ with aba1:
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado encontrado com os filtros.")
     else:
-        qtd_solicitada = df_filtrado['Qtd.'].sum()
-        qtd_solicitada = 0 if pd.isna(qtd_solicitada) else int(qtd_solicitada)
-        st.metric("📦 Solicitado", qtd_solicitada)
+        # 📦 Quantidade Solicitada
+        try:
+            qtd_solicitada = df_filtrado['Qtd.'].sum()
+            qtd_solicitada = int(qtd_solicitada) if pd.notnull(qtd_solicitada) else 0
+            st.metric("📦 Solicitado", qtd_solicitada)
+        except:
+            st.metric("📦 Solicitado", 0)
 
+        # ⏳ Quantidade Pendente
         if 'Qtd. Pendente' in df_filtrado.columns:
-            qtd_pendente = df_filtrado['Qtd. Pendente'].sum()
-            qtd_pendente = 0 if pd.isna(qtd_pendente) else int(qtd_pendente)
-            st.metric("⏳ Pendente", qtd_pendente)
+            try:
+                qtd_pendente = df_filtrado['Qtd. Pendente'].sum()
+                qtd_pendente = int(qtd_pendente) if pd.notnull(qtd_pendente) else 0
+                st.metric("⏳ Pendente", qtd_pendente)
+            except:
+                st.metric("⏳ Pendente", 0)
 
+        # 💸 Valor Total
         if 'Valor' in df_filtrado.columns:
-            valor_total = df_filtrado['Valor'].sum()
-            valor_total = 0.0 if pd.isna(valor_total) else valor_total
-            st.metric("💸 Valor Total", f"R$ {valor_total:,.2f}")
+            try:
+                valor_total = df_filtrado['Valor'].sum()
+                valor_total = 0.0 if pd.isna(valor_total) else valor_total
+                st.metric("💸 Valor Total", f"R$ {valor_total:,.2f}")
+            except:
+                st.metric("💸 Valor Total", "R$ 0,00")
 
+        # 📅 Média Dias em Situação
         if 'Dias em Situação' in df_filtrado.columns:
-            media_dias = df_filtrado['Dias em Situação'].mean()
-            media_dias = 0.0 if pd.isna(media_dias) else media_dias
-            st.metric("📅 Média Dias", f"{media_dias:.1f} dias")
+            try:
+                media_dias = df_filtrado['Dias em Situação'].mean()
+                media_dias = 0.0 if pd.isna(media_dias) else media_dias
+                st.metric("📅 Média Dias", f"{media_dias:.1f} dias")
+            except:
+                st.metric("📅 Média Dias", "0.0 dias")
+
 
 # 📊 Gráficos
 with aba2:
