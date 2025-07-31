@@ -110,7 +110,7 @@ with st.sidebar:
     st.markdown("---")
 
     tema = st.selectbox("🎨 Tema Plotly", ["plotly_white", "plotly_dark"])
-    sla_threshold = st.slider("⚡ SLA Threshold (dias)", 1, 30, 7)
+    sla_threshold = st.slider("⚡ SLA Threshold (dias)", min_value=1, max_value=30, value=7)
     st.markdown("---")
 
     st.subheader("📎 Info do CSV")
@@ -137,7 +137,7 @@ with st.sidebar:
     )
     freq = st.radio(
         "📊 Agregação",
-        ["D", "W", "M"],
+        options=["D", "W", "M"],
         format_func=lambda x: {"D":"Diária","W":"Semanal","M":"Mensal"}[x]
     )
     st.markdown("---")
@@ -209,7 +209,7 @@ with tab1:
 with tab2:
     st.markdown("### Gráficos Avançados")
 
-    # 2.1 Pedidos por período
+    # Pedidos por Período
     hist = (
         df_f['Data da Solicitação']
         .dt.to_period(freq)
@@ -219,66 +219,85 @@ with tab2:
         .rename_axis("periodo")
         .reset_index(name="Qtde")
     )
-    fig_hist = px.bar(hist, x='periodo', y='Qtde',
-                      title="Pedidos por Período", template=tema,
-                      color_discrete_sequence=[PRIMARY_COLOR])
+    fig_hist = px.bar(
+        hist, x='periodo', y='Qtde',
+        title="Pedidos por Período", template=tema,
+        color_discrete_sequence=[PRIMARY_COLOR]
+    )
     st.plotly_chart(fig_hist, use_container_width=True)
 
-    # 2.2 Box-Plot de atrasos
+    # Box-Plot de Atrasos
     if 'Dias em Situação' in df_f:
-        fig_box = px.box(df_f, x="Cód.Equipamento", y="Dias em Situação",
-                         title="Distribuição de Atrasos por Equipamento",
-                         template=tema)
+        fig_box = px.box(
+            df_f, x="Cód.Equipamento", y="Dias em Situação",
+            title="Distribuição de Atrasos por Equipamento",
+            template=tema
+        )
         st.plotly_chart(fig_box, use_container_width=True)
 
-    # 2.3 Pareto de pendências
+    # Pareto de Pendências
     if 'Qtd. Pendente' in df_f:
         pend = df_f.groupby("Cód.Equipamento")["Qtd. Pendente"]\
                    .sum().sort_values(ascending=False)
         cum_pct = pend.cumsum()/pend.sum()
         fig_pareto = go.Figure([
-            go.Bar(x=pend.index, y=pend.values, name="Pendentes", marker_color=PRIMARY_COLOR),
+            go.Bar(x=pend.index, y=pend.values,
+                   name="Pendentes", marker_color=PRIMARY_COLOR),
             go.Scatter(x=pend.index, y=cum_pct, name="Acumulado %",
                        yaxis="y2", line_color=ALERT_COLOR)
         ])
         fig_pareto.update_layout(
             title="Pareto de Equipamentos Pendentes",
             yaxis=dict(title="Qtd. Pendentes"),
-            yaxis2=dict(overlaying="y", side="right", title="Acumulado %", tickformat=".0%"),
+            yaxis2=dict(overlaying="y", side="right",
+                        title="Acumulado %", tickformat=".0%"),
             template=tema
         )
         st.plotly_chart(fig_pareto, use_container_width=True)
 
-    # 2.4 Scatter Valor × Dias
+    # Scatter Valor × Dias
     if 'Valor' in df_f and 'Dias em Situação' in df_f:
-        fig_scat = px.scatter(df_f, x="Valor", y="Dias em Situação",
-                              color="SITUAÇÃO" if 'SITUAÇÃO' in df_f else None,
-                              size="Qtd. Solicitada" if 'Qtd. Solicitada' in df_f else None,
-                              title="Valor da Solicitação vs Dias em Situação",
-                              template=tema, hover_data=["Cód.Equipamento"])
+        fig_scat = px.scatter(
+            df_f, x="Valor", y="Dias em Situação",
+            color="SITUAÇÃO" if 'SITUAÇÃO' in df_f else None,
+            size="Qtd. Solicitada" if 'Qtd. Solicitada' in df_f else None,
+            title="Valor da Solicitação vs Dias em Situação",
+            template=tema,
+            hover_data=["Cód.Equipamento"]
+        )
         st.plotly_chart(fig_scat, use_container_width=True)
 
-    # 2.5 Gastos por Tipo de Material
+    # Gastos por Tipo de Material
     if 'Valor' in df_f and 'TIPO' in df_f:
         gastos_tipo = df_f.groupby('TIPO')['Valor'].sum().reset_index()
-        fig_gastos = px.bar(gastos_tipo, x='TIPO', y='Valor',
-                            title="💰 Gastos por Tipo de Material",
-                            template=tema,
-                            color='TIPO',
-                            color_discrete_sequence=px.colors.qualitative.Plotly)
+        fig_gastos = px.bar(
+            gastos_tipo, x='TIPO', y='Valor',
+            title="💰 Gastos por Tipo de Material",
+            template=tema,
+            color='TIPO',
+            color_discrete_sequence=px.colors.qualitative.Plotly
+        )
         st.plotly_chart(fig_gastos, use_container_width=True)
 
-    # 2.6 Percentual de Pedidos por Tipo (Pizza)
+    # Percentual de Pedidos por Tipo (Pizza) — ajustado
     if 'TIPO' in df_f:
-        pedidos_tipo = (df_f['TIPO']
-                        .value_counts()
-                        .reset_index()
-                        .rename(columns={'index':'TIPO','TIPO':'Qtde'}))
-        fig_pie = px.pie(pedidos_tipo, names='TIPO', values='Qtde',
-                         title="🥧 Percentual de Pedidos por Tipo",
-                         template=tema,
-                         color_discrete_sequence=px.colors.sequential.RdBu)
-        st.plotly_chart(fig_pie, use_container_width=True)
+        # agrupa e renomeia sem conflitos
+        pedidos_tipo = (
+            df_f.groupby('TIPO')
+                .size()
+                .reset_index(name='Qtde')
+        )
+        if not pedidos_tipo.empty:
+            fig_pie = px.pie(
+                pedidos_tipo,
+                names='TIPO',
+                values='Qtde',
+                title="🥧 Percentual de Pedidos por Tipo",
+                template=tema
+            )
+            st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.info("Sem dados para pizza de pedidos por tipo.")
 
 with tab3:
     st.markdown("### Detalhamento Interativo")
@@ -286,4 +305,8 @@ with tab3:
     gb.configure_pagination(paginationAutoPageSize=True)
     gb.configure_side_bar()
     AgGrid(df_f, gridOptions=gb.build(), theme="alpine")
-    st.download_button("📥 Exportar CSV Filtrado", df_f.to_csv(index=False), "filtro_export.csv")
+    st.download_button(
+        "📥 Exportar CSV Filtrado",
+        df_f.to_csv(index=False),
+        "filtro_export.csv"
+    )
