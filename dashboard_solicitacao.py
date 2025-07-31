@@ -170,4 +170,9 @@ with aba3:
                             color_continuous_scale='Teal')
             st.plotly_chart(fig_gt, use_container_width=True)
 
-            fig_pizza_tipo =
+            fig_pizza_tipo = px.pie(df_filtrado,
+                            names='TIPO',
+                            values='Valor',
+                            title='🧁 Distribuição de Gastos por Tipo')
+            st.plotly_chart(fig_pizza_tipo, use_container_width=True)
+
