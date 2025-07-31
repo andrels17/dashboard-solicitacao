@@ -110,7 +110,7 @@ with st.sidebar:
     st.markdown("---")
 
     tema = st.selectbox("🎨 Tema Plotly", ["plotly_white", "plotly_dark"])
-    sla_threshold = st.slider("⚡ SLA Threshold (dias)", min_value=1, max_value=30, value=7)
+    sla_threshold = st.slider("⚡ SLA Threshold (dias)", 1, 30, 7)
     st.markdown("---")
 
     st.subheader("📎 Info do CSV")
@@ -137,7 +137,7 @@ with st.sidebar:
     )
     freq = st.radio(
         "📊 Agregação",
-        options=["D", "W", "M"],
+        ["D", "W", "M"],
         format_func=lambda x: {"D":"Diária","W":"Semanal","M":"Mensal"}[x]
     )
     st.markdown("---")
@@ -174,28 +174,19 @@ df_seg = preprocessar(df, freq, (data_inicio, data_fim))
 # ------------------------------------------------------------
 # 5. Calcula KPIs atuais x período anterior
 # ------------------------------------------------------------
-# registros
 reg_atual = len(df_f)
-reg_prev = len(df[
+reg_prev  = len(df[
     df['Data da Solicitação']
     .between(
         pd.to_datetime(data_inicio - (data_fim-data_inicio) - timedelta(days=1)),
         pd.to_datetime(data_inicio - timedelta(days=1))
     )
 ])
-
-# solicitados / pendentes distintos
 sol_atual  = df_f['Cód.Equipamento'].nunique()
 pend_atual = df_f.loc[df_f.get('Qtd. Pendente',0) > 0,'Cód.Equipamento'].nunique()
-# para comparação simplificada usamos totais globais
-sol_prev  = df['Cód.Equipamento'].nunique()
-pend_prev = df.loc[df.get('Qtd. Pendente',0) > 0,'Cód.Equipamento'].nunique()
-
-# SLA baseado no threshold
-if 'Dias em Situação' in df_f:
-    sla_atual = (df_f['Dias em Situação'] <= sla_threshold).mean()
-else:
-    sla_atual = np.nan
+sol_prev   = df['Cód.Equipamento'].nunique()
+pend_prev  = df.loc[df.get('Qtd. Pendente',0) > 0,'Cód.Equipamento'].nunique()
+sla_atual  = (df_f['Dias em Situação'] <= sla_threshold).mean() if 'Dias em Situação' in df_f else np.nan
 
 # ------------------------------------------------------------
 # 6. Layout com Tabs
@@ -208,18 +199,17 @@ with tab1:
     c1.metric("📝 Registros", reg_atual, delta=reg_atual-reg_prev)
     c2.metric("🔢 Solicitados (distintos)", sol_atual, delta=sol_atual-sol_prev)
     c3.metric("⏳ Pendentes (distintos)", pend_atual, delta=pend_atual-pend_prev)
-    c4.metric(f"✅ SLA (<={sla_threshold}d)", 
-              f"{sla_atual:.1%}", 
+    c4.metric(f"✅ SLA (≤{sla_threshold}d)",
+              f"{sla_atual:.1%}",
               delta=f"{sla_atual - 0.8:.1%}")
-    st.caption("Comparado ao período anterior")
-
     pend_pct = pend_atual/sol_atual if sol_atual else 0
     if pend_pct > 0.2:
         st.warning(f"Atenção: {pend_pct:.1%} pendentes (>20%)")
 
 with tab2:
     st.markdown("### Gráficos Avançados")
-    # 2.1 Histograma por período
+
+    # 2.1 Pedidos por período
     hist = (
         df_f['Data da Solicitação']
         .dt.to_period(freq)
@@ -234,54 +224,61 @@ with tab2:
                       color_discrete_sequence=[PRIMARY_COLOR])
     st.plotly_chart(fig_hist, use_container_width=True)
 
-    # 2.2 Box-Plot: distribuição de atrasos
+    # 2.2 Box-Plot de atrasos
     if 'Dias em Situação' in df_f:
-        fig_box = px.box(
-            df_f, x="Cód.Equipamento", y="Dias em Situação",
-            title="Distribuição de Atrasos por Equipamento",
-            template=tema
-        )
+        fig_box = px.box(df_f, x="Cód.Equipamento", y="Dias em Situação",
+                         title="Distribuição de Atrasos por Equipamento",
+                         template=tema)
         st.plotly_chart(fig_box, use_container_width=True)
 
     # 2.3 Pareto de pendências
     if 'Qtd. Pendente' in df_f:
-        pend = df_f.groupby("Cód.Equipamento")["Qtd. Pendente"] \
+        pend = df_f.groupby("Cód.Equipamento")["Qtd. Pendente"]\
                    .sum().sort_values(ascending=False)
-        cum_pct = pend.cumsum() / pend.sum()
-        fig_pareto = go.Figure()
-        fig_pareto.add_trace(go.Bar(
-            x=pend.index, y=pend.values, name="Pendentes",
-            marker_color=PRIMARY_COLOR))
-        fig_pareto.add_trace(go.Scatter(
-            x=pend.index, y=cum_pct,
-            name="Acumulado %",
-            yaxis="y2",
-            line_color=ALERT_COLOR
-        ))
+        cum_pct = pend.cumsum()/pend.sum()
+        fig_pareto = go.Figure([
+            go.Bar(x=pend.index, y=pend.values, name="Pendentes", marker_color=PRIMARY_COLOR),
+            go.Scatter(x=pend.index, y=cum_pct, name="Acumulado %",
+                       yaxis="y2", line_color=ALERT_COLOR)
+        ])
         fig_pareto.update_layout(
             title="Pareto de Equipamentos Pendentes",
             yaxis=dict(title="Qtd. Pendentes"),
-            yaxis2=dict(
-                title="Acumulado %",
-                overlaying="y",
-                side="right",
-                tickformat=".0%"
-            ),
+            yaxis2=dict(overlaying="y", side="right", title="Acumulado %", tickformat=".0%"),
             template=tema
         )
         st.plotly_chart(fig_pareto, use_container_width=True)
 
     # 2.4 Scatter Valor × Dias
     if 'Valor' in df_f and 'Dias em Situação' in df_f:
-        fig_scat = px.scatter(
-            df_f, x="Valor", y="Dias em Situação",
-            color="SITUAÇÃO" if 'SITUAÇÃO' in df_f else None,
-            size="Qtd. Solicitada" if 'Qtd. Solicitada' in df_f else None,
-            title="Valor da Solicitação vs Dias em Situação",
-            template=tema,
-            hover_data=["Cód.Equipamento"]
-        )
+        fig_scat = px.scatter(df_f, x="Valor", y="Dias em Situação",
+                              color="SITUAÇÃO" if 'SITUAÇÃO' in df_f else None,
+                              size="Qtd. Solicitada" if 'Qtd. Solicitada' in df_f else None,
+                              title="Valor da Solicitação vs Dias em Situação",
+                              template=tema, hover_data=["Cód.Equipamento"])
         st.plotly_chart(fig_scat, use_container_width=True)
+
+    # 2.5 Gastos por Tipo de Material
+    if 'Valor' in df_f and 'TIPO' in df_f:
+        gastos_tipo = df_f.groupby('TIPO')['Valor'].sum().reset_index()
+        fig_gastos = px.bar(gastos_tipo, x='TIPO', y='Valor',
+                            title="💰 Gastos por Tipo de Material",
+                            template=tema,
+                            color='TIPO',
+                            color_discrete_sequence=px.colors.qualitative.Plotly)
+        st.plotly_chart(fig_gastos, use_container_width=True)
+
+    # 2.6 Percentual de Pedidos por Tipo (Pizza)
+    if 'TIPO' in df_f:
+        pedidos_tipo = (df_f['TIPO']
+                        .value_counts()
+                        .reset_index()
+                        .rename(columns={'index':'TIPO','TIPO':'Qtde'}))
+        fig_pie = px.pie(pedidos_tipo, names='TIPO', values='Qtde',
+                         title="🥧 Percentual de Pedidos por Tipo",
+                         template=tema,
+                         color_discrete_sequence=px.colors.sequential.RdBu)
+        st.plotly_chart(fig_pie, use_container_width=True)
 
 with tab3:
     st.markdown("### Detalhamento Interativo")
