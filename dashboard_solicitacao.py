@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import csv
 
-# 🔍 Funções para validação do CSV
+# 🔍 Validação inteligente do CSV
 def detectar_configuracao_csv(arquivo):
     with open(arquivo, "r", encoding="utf-8") as f:
         linha = f.readline()
@@ -31,7 +31,7 @@ arquivo_original = "solicitacao_to.csv"
 arquivo_limpo = "csv_validado.csv"
 sep, n_colunas, linhas_validas, linhas_invalidas = validar_csv(arquivo_original, arquivo_limpo)
 
-# 📋 Sidebar: relatório da validação
+# 📋 Validação no sidebar
 st.sidebar.subheader("🔎 Validação do CSV")
 st.sidebar.write(f"Separador detectado: `{sep}`")
 st.sidebar.write(f"Colunas esperadas: {n_colunas}")
@@ -42,13 +42,13 @@ if linhas_invalidas:
         for i, linha in linhas_invalidas[:10]:
             st.write(f"Linha {i}: {linha}")
 
-# 📈 Carregamento de dados
+# 📈 Carregamento
 df = pd.read_csv(arquivo_limpo, sep=sep, encoding="utf-8")
 df.rename(columns={col: col.strip() for col in df.columns}, inplace=True)
 df['Data da Solicitação'] = pd.to_datetime(df['Data da Solicitação'], errors='coerce')
 df = df.dropna(subset=['Mês', 'TIPO', 'Data da Solicitação'])
 
-# 💰 Gera coluna "Valor" se houver colunas específicas
+# 💰 Soma dos valores se houver colunas componentes
 if all(col in df.columns for col in ['Combustível', 'Manutenção', 'Peças']):
     df['Valor'] = df[['Combustível', 'Manutenção', 'Peças']].sum(axis=1)
 
@@ -88,7 +88,7 @@ if selected_frota != "Todos":
 df_filtrado = df[filtro].copy().sort_values(by='Qtde. Pendente', ascending=False)
 df_filtrado['Alerta'] = df_filtrado['Qtde. Pendente'].apply(lambda x: '⚠️' if x > 50 else '')
 
-# 📚 Abas do dashboard
+# 📚 Abas
 aba1, aba2, aba3 = st.tabs(["📍 Indicadores", "📊 Gráficos", "📋 Tabela"])
 
 with aba1:
@@ -140,8 +140,8 @@ with aba2:
                                    x='Departamento', y='Valor',
                                    title='💰 Gastos por Departamento', text_auto=True)
             st.plotly_chart(fig_gasto_dep)
-            
-    with aba3:
+
+with aba3:
     st.subheader("📋 Dados Filtrados")
     st.caption(f"{len(df_filtrado)} registros encontrados")
 
@@ -154,11 +154,9 @@ with aba2:
 
     st.dataframe(df_filtrado[colunas_exibir])
 
-    # 📥 Botão de download
     st.download_button(
         label="📥 Baixar CSV filtrado",
         data=df_filtrado.to_csv(index=False).encode('utf-8'),
         file_name="dados_filtrados.csv",
         mime="text/csv"
     )
-
