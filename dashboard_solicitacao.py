@@ -27,31 +27,40 @@ def validar_csv(entrada, saida):
         escritor.writerows(linhas_validas)
     return sep, n_colunas, linhas_validas, linhas_invalidas
 
-# 🔄 Validação e leitura
+# 📁 Validação e leitura
 arquivo_original = "solicitacao_to.csv"
 arquivo_limpo = "csv_validado.csv"
 sep, n_colunas, linhas_validas, linhas_invalidas = validar_csv(arquivo_original, arquivo_limpo)
 
-# 🎛️ Configuração inicial
+# 🔧 Configuração inicial
 st.set_page_config(page_title="Dashboard de Solicitações", layout="wide")
 st.title("📊 Dashboard de Equipamentos")
 
-# 📎 Resumo do CSV
+# 📎 Relatório lateral
 st.sidebar.subheader("📎 Relatório do CSV")
-st.sidebar.write(f"Separador: `{sep}`")
-st.sidebar.write(f"Colunas: {n_colunas}")
+st.sidebar.write(f"Separador detectado: `{sep}`")
+st.sidebar.write(f"Nº de colunas: {n_colunas}")
 st.sidebar.write(f"✔️ Linhas válidas: {len(linhas_validas)}")
 st.sidebar.write(f"❌ Linhas inválidas: {len(linhas_invalidas)}")
 
-# 📊 Leitura e preparo dos dados
+# 📊 Leitura dos dados
 df = pd.read_csv(arquivo_limpo, sep=sep, encoding="utf-8")
 df.rename(columns={col: col.strip() for col in df.columns}, inplace=True)
 df['Data da Solicitação'] = pd.to_datetime(df['Data da Solicitação'], errors='coerce')
 df['AnoMes'] = df['Data da Solicitação'].dt.to_period("M").astype(str)
+
+# 💰 Cálculo do valor
 if 'Qtd.' in df.columns and 'Valor Último' in df.columns:
     df['Valor'] = df['Qtd.'] * df['Valor Último']
+
+# ⚠️ Alerta de dias
 if 'Dias em Situação' in df.columns:
     df['Alerta Dias'] = df['Dias em Situação'].apply(lambda x: '⚠️' if x >= 30 else '')
+
+# 🧪 Diagnóstico
+st.sidebar.write("📅 Intervalo de datas detectado:")
+st.sidebar.write(f"{df['Data da Solicitação'].min()} → {df['Data da Solicitação'].max()}")
+st.sidebar.write(f"Registros totais: {len(df)}")
 
 # 🎛️ Filtros
 tipos = sorted(df['TIPO'].dropna().unique()) if 'TIPO' in df.columns else []
@@ -77,17 +86,19 @@ filtro = (
 if tipo != "Todos": filtro &= (df['TIPO'] == tipo)
 if fornecedor != "Todos": filtro &= (df['Fornecedor'] == fornecedor)
 if frota != "Todos": filtro &= (df['Frota'] == frota)
+
 df_filtrado = df[filtro].copy()
+st.sidebar.write(f"🔎 Registros filtrados: {len(df_filtrado)}")
 
 # 📚 Abas visuais
 aba1, aba2, aba3 = st.tabs(["📍 Indicadores", "📊 Gráficos", "💰 Gastos"])
 
+# 📍 Indicadores
 with aba1:
     st.subheader("📍 Indicadores")
-
     if df_filtrado.empty:
         st.warning("⚠️ Nenhum dado encontrado com os filtros selecionados.")
-        st.image("https://i.imgur.com/xY9cQkB.png", caption="Tente ajustar os filtros para visualizar os indicadores.")
+        st.image("https://i.imgur.com/xY9cQkB.png", caption="Tente ajustar os filtros.")
     else:
         if 'Qtd. Solicitada' in df_filtrado.columns:
             st.metric("Solicitado", int(df_filtrado['Qtd. Solicitada'].sum()))
@@ -99,16 +110,16 @@ with aba1:
             media_dias = df_filtrado['Dias em Situação'].mean()
             st.metric("Média Dias em Situação", f"{media_dias:.1f} dias")
 
+# 📊 Gráficos
 with aba2:
     st.subheader("📊 Gráficos")
-
     if df_filtrado.empty:
-        st.warning("⚠️ Sem dados para gerar gráficos com os filtros atuais.")
+        st.warning("⚠️ Sem dados para gráficos.")
     else:
         if 'AnoMes' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
             valor_mensal = df_filtrado.groupby('AnoMes')['Valor'].sum().reset_index()
             fig_valor_mes = px.line(valor_mensal, x='AnoMes', y='Valor', markers=True,
-                                    title='📈 Valor por Mês', line_shape='linear')
+                                    title='📈 Valor por Mês')
             st.plotly_chart(fig_valor_mes, use_container_width=True)
 
         if 'Fornecedor' in df_filtrado.columns and 'Qtd. Pendente' in df_filtrado.columns:
@@ -132,37 +143,22 @@ with aba2:
                               color_continuous_scale='Purples')
             st.plotly_chart(fig_tipo, use_container_width=True)
 
+# 💰 Gastos
 with aba3:
     st.subheader("💰 Gastos")
-
     if df_filtrado.empty:
-        st.warning("⚠️ Nenhum dado para exibir os gastos. Revise os filtros.")
+        st.warning("⚠️ Nenhum dado para exibir os gastos.")
     else:
         if 'TIPO' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
             gasto_tipo = df_filtrado.groupby('TIPO')['Valor'].sum().reset_index()
-            fig_gt = px.bar(
-                gasto_tipo.sort_values(by='Valor', ascending=False),
-                x='TIPO', y='Valor',
-                title='💰 Gastos por Tipo',
-                text_auto=True,
-                color='Valor',
-                color_continuous_scale='Teal'
-            )
+            fig_gt = px.bar(gasto_tipo.sort_values(by='Valor', ascending=False),
+                            x='TIPO', y='Valor',
+                            title='💰 Gastos por Tipo',
+                            text_auto=True,
+                            color='Valor',
+                            color_continuous_scale='Teal')
             st.plotly_chart(fig_gt, use_container_width=True)
 
         if 'Fornecedor' in df_filtrado.columns and 'Valor' in df_filtrado.columns:
             gasto_forn = df_filtrado.groupby('Fornecedor')['Valor'].sum().reset_index()
-            gasto_forn['% do Total'] = round((gasto_forn['Valor'] / gasto_forn['Valor'].sum()) * 100, 2)
-
-            fig_gf = px.bar(
-                gasto_forn.sort_values(by='Valor', ascending=False),
-                x='Fornecedor', y='Valor',
-                title='🏷️ Gastos por Fornecedor',
-                text_auto=True,
-                color='Valor',
-                color_continuous_scale='Blues'
-            )
-            st.plotly_chart(fig_gf, use_container_width=True)
-
-# ✅ Final
-st.caption("Dashboard visual gerado com Streamlit + Plotly • Versão revisada para André 🎯")
+            gasto_forn['% do Total'] = round((gasto_forn
